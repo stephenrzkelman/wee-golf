@@ -1,8 +1,10 @@
 import {defs, tiny} from './examples/common.js';
 
 const {
-    Vector, Vector3, vec, vec3, vec4, color, hex_color, Shader, Matrix, Mat4, Light, Shape, Material, Scene,
+    Vector, Vector3, vec, vec3, vec4, color, hex_color, Shader, Texture, Matrix, Mat4, Light, Shape, Material, Scene,
 } = tiny;
+const scale_factor = 500;
+
 
 export class Assignment3 extends Scene {
     constructor() {
@@ -11,84 +13,33 @@ export class Assignment3 extends Scene {
 
         // At the beginning of our program, load one of each of these shape definitions onto the GPU.
         this.shapes = {
-            torus: new defs.Torus(40, 40),
             sphere: new defs.Subdivision_Sphere(4),
-            planet2: new defs.Subdivision_Sphere(3),
-            planet1: new (defs.Subdivision_Sphere.prototype.make_flat_shaded_version())(2),
-            sphere1: new (defs.Subdivision_Sphere.prototype.make_flat_shaded_version())(1),
-            circle: new defs.Regular_2D_Polygon(1, 15),
-            moon: new (defs.Subdivision_Sphere.prototype.make_flat_shaded_version())(1)
+            square: new defs.Square()
 
-            // TODO:  Fill in as many additional shape instances as needed in this key/value table.
-            //        (Requirement 1)
         };
 
         // *** Materials
         this.materials = {
-            sun: new Material(new defs.Phong_Shader(),
-                {ambient: 1, diffusivity: 0, specularity: 0, color: hex_color("#ff0000")}),
-            planet1: new Material(new defs.Phong_Shader(),
-                {ambient: 0, diffusivity: 1, specularity: 0, color: hex_color("#808080")}),
-            planet2phong: new Material(new defs.Phong_Shader(),
-                {ambient: 0, diffusivity: .2, specularity: 1, color: hex_color("#80FFFF")}),
-            planet2gouraud: new Material(new Gouraud_Shader(),
-                {ambient: 0, diffusivity: .2, specularity: 1, color: hex_color("#80FFFF")}),
-            planet3: new Material(new defs.Phong_Shader(),
-                {ambient: 0, diffusivity: 1, specularity: 1, color: hex_color("#B08040")}),
-            ring: new Material(new Ring_Shader(),
-                {ambient: 1, diffusivity: 0, specularity: 0, color: hex_color("#B08040")}),
-            planet4: new Material(new defs.Phong_Shader(),
-                {ambient: 0, diffusivity: 1, specularity: 1, color: hex_color("#ADD8E6")}),
-            // TODO:  Fill in as many additional material objects as needed in this key/value table.
-            //        (Requirement 4)
+            grass_new: new Material(new defs.Bump_Map(), // make this bump later
+                {ambient: .5, texture: new Texture("assets/grass.jpeg")}),
+            grass: new Material(new defs.Phong_Shader(),
+            {ambient: 1, diffusivity: 0, specularity: 0, color: hex_color("#00ff80")}),
+            walls: new Material(new defs.Phong_Shader(),
+                {ambient: 1, diffusivity: 0, specularity: 0, color: hex_color("#0080ff")}),
+            ball: new Material(new defs.Phong_Shader(),
+                {ambient: 1, diffusivity: 0, specularity: 0, color: hex_color("#ffffff")}),
         }
 
-        this.initial_camera_location = Mat4.look_at(vec3(0, 10, 20), vec3(0, 0, 0), vec3(0, 1, 0));
-    }
+        this.initial_camera_location = Mat4.look_at(vec3(0, 10, -scale_factor/2), vec3(0, 0, scale_factor), vec3(0, 1, 0)); //eye, poi, up
+        console.log(this.initial_camera_location)
+        this.ball_position;
+        this.ball_cam;
+        this.been_hit = false;
+ ;   }
 
-    make_control_panel() {
+    make_control_ptanel() {
         // Draw the scene's buttons, setup their actions and keyboard shortcuts, and monitor live measurements.
-        this.key_triggered_button("View solar system", ["Control", "0"], () => this.attached = () => this.initial_camera_location);
-        this.new_line();
-        this.key_triggered_button("Attach to planet 1", ["Control", "1"], () => this.attached = () => this.planet_1);
-        this.key_triggered_button("Attach to planet 2", ["Control", "2"], () => this.attached = () => this.planet_2);
-        this.new_line();
-        this.key_triggered_button("Attach to planet 3", ["Control", "3"], () => this.attached = () => this.planet_3);
-        this.key_triggered_button("Attach to planet 4", ["Control", "4"], () => this.attached = () => this.planet_4);
-        this.new_line();
-        this.key_triggered_button("Attach to moon", ["Control", "m"], () => this.attached = () => this.moon);
-    }
-
-    draw_planets(context,program_state,m_t,t){
-        let planet1_tf = m_t
-        planet1_tf = planet1_tf.times(Mat4.rotation(t,0,1,0)).times(Mat4.translation(5,0,0))
-        this.shapes.planet1.draw(context, program_state,planet1_tf,this.materials.planet1);
-        let planet2_tf = m_t
-        planet2_tf = planet2_tf.times(Mat4.rotation(t/2,0,1,0)).times(Mat4.translation(8,0,0))
-        if(Math.floor(t%2) === 1){
-            //gouraud
-            this.shapes.planet2.draw(context, program_state,planet2_tf,this.materials.planet2gouraud);
-        }
-        else{
-            this.shapes.planet2.draw(context, program_state,planet2_tf,this.materials.planet2phong);
-        }
-        let planet3_tf = m_t
-        planet3_tf = planet3_tf.times(Mat4.rotation(t/3,0,1,0)).times(Mat4.translation(11,0,0))
-        this.shapes.sphere.draw(context, program_state,planet3_tf,this.materials.planet3);
-        let planet3ring_tf = planet3_tf.times(Mat4.scale(3.5,3.5,.1))
-        this.shapes.torus.draw(context, program_state,planet3ring_tf,this.materials.ring);
-        let planet4_tf = m_t
-        planet4_tf = planet4_tf.times(Mat4.rotation(t/4,0,1,0)).times(Mat4.translation(14,0,0))
-        this.shapes.sphere.draw(context,program_state,planet4_tf,this.materials.planet4);
-        let moon_tf = planet4_tf
-        moon_tf = moon_tf.times(Mat4.rotation(t/2,0,1,0)).times(Mat4.translation(3,0,0))
-        this.shapes.moon.draw(context,program_state,moon_tf,this.materials.planet1)
-
-        this.planet_1 = Mat4.inverse(planet1_tf.times(Mat4.translation(0,0,5)))
-        this.planet_2 = Mat4.inverse(planet2_tf.times(Mat4.translation(0,0,5)))
-        this.planet_3 = Mat4.inverse(planet3_tf.times(Mat4.translation(0,0,5)))
-        this.planet_4 = Mat4.inverse(planet4_tf.times(Mat4.translation(0,0,5)))
-        this.moon = Mat4.inverse(moon_tf.times(Mat4.translation(0,0,5)))
+        this.key_triggered_button("Reset Camera", ["Control", "0"], () => this.attached = () => this.initial_camera_location);
     }
 
     display(context, program_state) {
@@ -97,39 +48,131 @@ export class Assignment3 extends Scene {
         if (!context.scratchpad.controls) {
             this.children.push(context.scratchpad.controls = new defs.Movement_Controls());
             // Define the global camera and projection matrices, which are stored in program_state.
-            program_state.set_camera(this.initial_camera_location);
+            program_state.camera_inverse = this.initial_camera_location;
         }
 
         program_state.projection_transform = Mat4.perspective(
             Math.PI / 4, context.width / context.height, .1, 1000);
 
-        // TODO: Create Planets (Requirement 1)
-        // this.shapes.[XXX].draw([XXX]) // <--example
+        // lighting
+        const light_position = vec4(0, 5, 5, 1); // The parameters of the Light are: position, color, size
+        
+        // Physics
 
-        // TODO: Lighting (Requirement 2)
-        const light_position = vec4(0, 5, 5, 1);
-        // The parameters of the Light are: position, color, size
-        const t = program_state.animation_time / 1000, dt = program_state.animation_delta_time / 1000;
-
-        // TODO:  Fill in matrix operations and drawing code to draw the solar system scene (Requirements 3 and 4)
-
-        const yellow = hex_color("#fac91a");
-        let model_transform = Mat4.identity();
-        let sun_tf = model_transform;
-        let sun_radius = Math.sin(t*2 * Math.PI/10+3/2*Math.PI/2)+2;
-        sun_tf = sun_tf.times(Mat4.scale(sun_radius, sun_radius, sun_radius));
-        let color_change = Math.sin(t*2 * Math.PI/10+3/2*Math.PI/2)/2+.5;
-        let sun_color = color(1,color_change,color_change,1)
-        program_state.lights = [new Light(light_position, sun_color, 10 ** sun_radius)];
-
-        this.shapes.sphere.draw(context, program_state, sun_tf, this.materials.sun.override({color: sun_color}));
-        this.draw_planets(context,program_state,model_transform,t);
-
-        if(this.attached !== undefined){
-            program_state.camera_inverse = this.attached()
-                .map((x,i)=>Vector.from(program_state.camera_inverse[i]).mix(x,0.1))
-
+        // get initial velocity and direction info (based on power +club + direction inputs)
+        let velocity = 20;       // based on power input
+        let phi = Math.PI/4;    // angle from vertical, based on club input
+        let theta = Math.PI/8;          // angle from z axis, based on direction input
+        // if the position & movement aren't set, initialize them
+        if(typeof this.ball_position === 'undefined' || this.been_hit === false){
+            this.ball_position = vec3(0,1,0);   // set initial ball position to 0
+            let x_initial_velocity = velocity * Math.sin(phi) * Math.sin(theta);
+            let y_initial_velocity = velocity * Math.cos(phi);
+            let z_initial_velocity = velocity * Math.sin(phi) * Math.cos(theta);
+            this.ball_velocity = vec3(x_initial_velocity,y_initial_velocity,z_initial_velocity);
         }
+        // otherwise, update them
+        else{
+            // check for collision
+            let projected_y = this.ball_position[1] + this.ball_velocity[1] - 0.5;
+            if(projected_y <= 1){
+                // determine time to collision
+                let time_to_collision = this.ball_velocity[1] + Math.sqrt((this.ball_velocity[1] ** 2)+ 2 * (this.ball_position[1] - 1));
+                // determine coordinates at time of collision
+                this.ball_position[0] += this.ball_velocity[0] * time_to_collision;
+                this.ball_position[2] += this.ball_velocity[2] * time_to_collision;
+                this.ball_position[1] += this.ball_velocity[1] * time_to_collision - (time_to_collision ** 2)/2;
+                // determine y velocity at time of collision
+                let collision_vy = this.ball_velocity[1] - time_to_collision;
+                // update velocity after collision
+                this.ball_velocity[0] *= 0.9;
+                this.ball_velocity[2] *= 0.9;
+                this.ball_velocity[1] = -0.25 * collision_vy;
+            }
+            // if no collision, just update with gravity
+            else{
+                // update positions
+                this.ball_position[0] += this.ball_velocity[0];
+                this.ball_position[2] += this.ball_velocity[2];
+                this.ball_position[1] += this.ball_velocity[1] - 0.5;
+                // update y velocity
+                this.ball_velocity[1] -= 1;
+            }
+
+            // // update position
+            // this.ball_position[0] += this.ball_velocity[0]; 
+            // this.ball_position[1] += this.ball_velocity[1]; 
+            // this.ball_position[2] += this.ball_velocity[2]; 
+            // // check for collision with ground
+            // if(this.ball_position[1] <= 1){ 
+            //     // figure out time of impact
+            //     let y_prev = this.ball_position[1] - this.ball_velocity[1] - 1;
+            //     let vy_prev = this.ball_velocity[1];
+            //     let time_to_collision = vy_prev + Math.sqrt(vy_prev**2 + 2 * y_prev);
+            //     // figure out actual updated positions
+            //     this.ball_position[0] -= (1-time_to_collision) * this.ball_velocity[0];
+            //     this.ball_position[1] -= (1-time_to_collision) * this.ball_velocity[1];
+            //     this.ball_position[2] -= (1-time_to_collision) * this.ball_velocity[2];
+            //     // figure out y velocity at time of collision
+            //     let vy_at_collision = this.ball_velocity[1] - time_to_collision;
+            //     // fix y position
+            //     this.ball_position[1] = 1; 
+            //     // update velocity to bounce
+            //     this.ball_velocity[0] *= 0.9;
+            //     this.ball_velocity[2] *= 0.9;
+            //     this.ball_velocity[1] = -0.25 * vy_at_collision;
+            //     // console.log(this.ball_velocity[1]);
+            //     // if(this.ball_velocity[1] <= 0.2){
+            //     //     this.ball_velocity[1] = 0;
+            //     // }
+            // }
+            // else{
+            //     // if no collision, just update with gravity
+            //     this.ball_velocity[1] -= 1; // gravity change in velocity per unit time
+            // }
+            // console.log(this.ball_velocity[1]);
+        }
+        let ball_location = Mat4.identity().times(Mat4.translation(this.ball_position[0], this.ball_position[1], this.ball_position[2]));
+        // this.ball_movement = vec3(x_change, y_change,)  
+        const t = program_state.animation_time / 1000, dt = program_state.animation_delta_time / 1000;
+        
+
+        let model_transform = Mat4.identity();
+        let ground_transform = model_transform.times(Mat4.rotation(Math.PI/2,1,0,0)).times(Mat4.scale(scale_factor,scale_factor,1));
+        let wall_transform1 = model_transform.times(Mat4.translation(0,scale_factor,scale_factor)).times(Mat4.scale(scale_factor,scale_factor,1));
+        let wall_transform2 = model_transform.times(Mat4.translation(scale_factor,scale_factor,0)).times(Mat4.rotation(Math.PI/2,0,1,0)).times(Mat4.scale(scale_factor,scale_factor,1));
+        let wall_transform3 = model_transform.times(Mat4.translation(-scale_factor,scale_factor,0)).times(Mat4.rotation(Math.PI/2,0,1,0)).times(Mat4.scale(scale_factor,scale_factor,1));
+        let wall_transform4 = model_transform.times(Mat4.translation(0,scale_factor,0)).times(Mat4.rotation(Math.PI/2,1,0,0)).times(Mat4.scale(scale_factor,scale_factor,1));
+        let ball_transform = model_transform;
+        ball_transform = ball_transform.times(ball_location);
+
+        // set camera to follow ball
+        // if (t > 0.5){
+        //     this.been_hit = true
+        // }
+        if (this.been_hit){
+            let eye = vec3(this.ball_position[0],this.ball_position[1]+5,this.ball_position[2] - 20);
+            let poi = this.ball_position;
+            let top = vec3(0, 1, 0)
+            this.ball_cam = Mat4.look_at(eye, poi, top)
+            program_state.camera_inverse = this.ball_cam;
+        }
+        else{
+            // alert('here')
+            program_state.camera_inverse = this.initial_camera_location;
+        }
+
+        program_state.lights = [new Light(light_position, hex_color("#80FFFF"), 10 ** 1)];
+
+        this.shapes.square.draw(context,program_state,ground_transform,this.materials.grass);
+        this.shapes.square.draw(context,program_state,wall_transform1,this.materials.walls);
+        this.shapes.square.draw(context, program_state, wall_transform2, this.materials.walls);
+        this.shapes.square.draw(context, program_state, wall_transform3, this.materials.walls);
+        this.shapes.square.draw(context, program_state, wall_transform4, this.materials.walls);
+        this.shapes.sphere.draw(context,program_state,ball_transform,this.materials.ball);
+
+        let test_transform = model_transform.times(Mat4.translation(0,1,1));
+        this.shapes.sphere.draw(context, program_state, test_transform, this.materials.ball)
     }
 }
 

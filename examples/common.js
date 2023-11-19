@@ -779,8 +779,8 @@ const Textured_Phong = defs.Textured_Phong =
     }
 
 
-const Fake_Bump_Map = defs.Fake_Bump_Map =
-    class Fake_Bump_Map extends Textured_Phong {
+const Bump_Map = defs.Bump_Map =
+    class Bump_Map extends Textured_Phong {
         // **Fake_Bump_Map** Same as Phong_Shader, except adds a line of code to
         // compute a new normal vector, perturbed according to texture color.
         fragment_glsl_code() {
@@ -788,13 +788,39 @@ const Fake_Bump_Map = defs.Fake_Bump_Map =
             return this.shared_glsl_code() + `
                 varying vec2 f_tex_coord;
                 uniform sampler2D texture;
-        
+
+                vec3 CalculateSurfaceGradient(vec3 n, vec3 dpdx, vec3 dpdy, float dhdx, float dhdy)
+                {
+                    vec3 r1 = cross(dpdy, n);
+                    vec3 r2 = cross(n, dpdx);
+                
+                    return (r1 * dhdx + r2 * dhdy) / dot(dpdx, r1);
+                }
+                
+                // Move the normal away from the surface normal in the opposite surface gradient direction
+                vec3 PerturbNormal(vec3 n, vec3 dpdx, vec3 dpdy, float dhdx, float dhdy)
+                {
+                    return normalize(n - CalculateSurfaceGradient(n, dpdx, dpdy, dhdx, dhdy));
+                }
+
+                // vec3 CalculateSurfaceNormal(vec3 position, vec3 normal, float height)
+                // {
+                //     vec3 dpdx = dFdx(position);
+                //     vec3 dpdy = dFdy(position);
+                
+                //     float dhdx = dFdx(height);
+                //     float dhdy = dFdy(height);
+                
+                //     return PerturbNormal(normal, dpdx, dpdy, dhdx, dhdy);
+                // }
+
                 void main(){
                     // Sample the texture image in the correct place:
                     vec4 tex_color = texture2D( texture, f_tex_coord );
                     if( tex_color.w < .01 ) discard;
                     // Slightly disturb normals based on sampling the same image that was used for texturing:
-                    vec3 bumped_N  = N + tex_color.rgb - .5*vec3(1,1,1);
+                    vec3 bumped_N  = N;
+                    //CalculateSurfaceNormal(position,N,f_tex_coord);
                     // Compute an initial (ambient) color:
                     gl_FragColor = vec4( ( tex_color.xyz + shape_color.xyz ) * ambient, shape_color.w * tex_color.w ); 
                     // Compute the final color with contributions from lights:
