@@ -3,10 +3,10 @@ import {defs, tiny} from './examples/common.js';
 const {
     Vector, Vector3, vec, vec3, vec4, color, hex_color, Shader, Texture, Matrix, Mat4, Light, Shape, Material, Scene,
 } = tiny;
-const scale_factor = 500;
+const scale_factor = 10;
 
 
-export class Assignment3 extends Scene {
+export class Project extends Scene {
     constructor() {
         // constructor(): Scenes begin by populating initial values like the Shapes and Materials they'll need.
         super();
@@ -14,15 +14,22 @@ export class Assignment3 extends Scene {
         // At the beginning of our program, load one of each of these shape definitions onto the GPU.
         this.shapes = {
             sphere: new defs.Subdivision_Sphere(4),
+            grass: new defs.Normal_Square(),
+            hill: new defs.Subdivision_Sphere(4),
             square: new defs.Square()
 
         };
+        // this.shapes.grass.arrays.texture_coord = this.shapes.grass.arrays.texture_coord.map(coord => coord.times(2));
 
         // *** Materials
         this.materials = {
-            grass_new: new Material(new defs.Bump_Map(), // make this bump later
-                {ambient: .5, texture: new Texture("assets/grass.jpeg")}),
-            grass: new Material(new defs.Phong_Shader(),
+            grass: new Material(new defs.Normal_Textured_Phong(), {
+                ambient: 1,
+                texture: new Texture('../assets/grass.jpeg'), 
+                normal_texture: new Texture('../assets/NormalMap.jpg') ,
+                dist: 1,
+            }),
+            grass_new: new Material(new defs.Phong_Shader(),
             {ambient: 1, diffusivity: 0, specularity: 0, color: hex_color("#00ff80")}),
             walls: new Material(new defs.Phong_Shader(),
                 {ambient: 1, diffusivity: 0, specularity: 0, color: hex_color("#0080ff")}),
@@ -37,7 +44,7 @@ export class Assignment3 extends Scene {
         this.been_hit = false;
  ;   }
 
-    make_control_ptanel() {
+    make_control_panel() {
         // Draw the scene's buttons, setup their actions and keyboard shortcuts, and monitor live measurements.
         this.key_triggered_button("Reset Camera", ["Control", "0"], () => this.attached = () => this.initial_camera_location);
     }
@@ -98,39 +105,6 @@ export class Assignment3 extends Scene {
                 // update y velocity
                 this.ball_velocity[1] -= 1;
             }
-
-            // // update position
-            // this.ball_position[0] += this.ball_velocity[0]; 
-            // this.ball_position[1] += this.ball_velocity[1]; 
-            // this.ball_position[2] += this.ball_velocity[2]; 
-            // // check for collision with ground
-            // if(this.ball_position[1] <= 1){ 
-            //     // figure out time of impact
-            //     let y_prev = this.ball_position[1] - this.ball_velocity[1] - 1;
-            //     let vy_prev = this.ball_velocity[1];
-            //     let time_to_collision = vy_prev + Math.sqrt(vy_prev**2 + 2 * y_prev);
-            //     // figure out actual updated positions
-            //     this.ball_position[0] -= (1-time_to_collision) * this.ball_velocity[0];
-            //     this.ball_position[1] -= (1-time_to_collision) * this.ball_velocity[1];
-            //     this.ball_position[2] -= (1-time_to_collision) * this.ball_velocity[2];
-            //     // figure out y velocity at time of collision
-            //     let vy_at_collision = this.ball_velocity[1] - time_to_collision;
-            //     // fix y position
-            //     this.ball_position[1] = 1; 
-            //     // update velocity to bounce
-            //     this.ball_velocity[0] *= 0.9;
-            //     this.ball_velocity[2] *= 0.9;
-            //     this.ball_velocity[1] = -0.25 * vy_at_collision;
-            //     // console.log(this.ball_velocity[1]);
-            //     // if(this.ball_velocity[1] <= 0.2){
-            //     //     this.ball_velocity[1] = 0;
-            //     // }
-            // }
-            // else{
-            //     // if no collision, just update with gravity
-            //     this.ball_velocity[1] -= 1; // gravity change in velocity per unit time
-            // }
-            // console.log(this.ball_velocity[1]);
         }
         let ball_location = Mat4.identity().times(Mat4.translation(this.ball_position[0], this.ball_position[1], this.ball_position[2]));
         // this.ball_movement = vec3(x_change, y_change,)  
@@ -164,15 +138,57 @@ export class Assignment3 extends Scene {
 
         program_state.lights = [new Light(light_position, hex_color("#80FFFF"), 10 ** 1)];
 
-        this.shapes.square.draw(context,program_state,ground_transform,this.materials.grass);
+        let ground_width=80
+        let ground_length=200              
+        const texture_scale = 10;
+
+        // Scale the texture coordinates:
+        for (let i=0;i<this.shapes.grass.arrays.texture_coord.length;i++){
+            this.shapes.grass.arrays.texture_coord[i][0] *= ground_length / texture_scale;
+            this.shapes.grass.arrays.texture_coord[i][1] *= ground_width / texture_scale;
+        }
+
+        // Draw ground                          
+        // this.shapes.grass.draw(context, program_state, ground_transform, this.materials.grass.override({dist: 1 / (ground_length / texture_scale)}));
+        this.shapes.grass.draw(context,program_state,ground_transform,this.materials.grass);
         this.shapes.square.draw(context,program_state,wall_transform1,this.materials.walls);
         this.shapes.square.draw(context, program_state, wall_transform2, this.materials.walls);
         this.shapes.square.draw(context, program_state, wall_transform3, this.materials.walls);
         this.shapes.square.draw(context, program_state, wall_transform4, this.materials.walls);
         this.shapes.sphere.draw(context,program_state,ball_transform,this.materials.ball);
 
-        let test_transform = model_transform.times(Mat4.translation(0,1,1));
-        this.shapes.sphere.draw(context, program_state, test_transform, this.materials.ball)
+        // adding shape to terrain - testing
+        let hill_transform = model_transform.times(Mat4.translation(2,0,5)).times(Mat4.scale(2,1,3));
+        //model_transform.times(Mat4.translation(0,5,0)).times(Mat4.scale(2, 2, 1));
+        this.shapes.hill.draw(context, program_state, hill_transform, this.materials.grass);
+
+        // let test_transform = model_transform.times(Mat4.translation(0,1,1));
+        // this.shapes.sphere.draw(context, program_state, test_transform, this.materials.ball)
+    }
+}
+
+class Grass_Shader extends defs.Textured_Phong {
+    
+     // **Fake_Bump_Map** Same as Phong_Shader, except adds a line of code to
+    // compute a new normal vector, perturbed according to texture color.
+    fragment_glsl_code() {
+        // ********* FRAGMENT SHADER *********
+        return this.shared_glsl_code() + `
+            varying vec2 f_tex_coord;
+            uniform sampler2D texture;
+            void main(){
+                //-------------------------------------------------------
+
+                // Sample the texture image in the correct place:
+                vec4 tex_color = texture2D( texture, f_tex_coord );
+                if( tex_color.w < .01 ) discard;
+                // Slightly disturb normals based on sampling the same image that was used for texturing:
+                vec3 bumped_N  = N + tex_color.rgb - .5*vec3(1,1,1);
+                // Compute an initial (ambient) color:
+                gl_FragColor = vec4( ( tex_color.xyz + shape_color.xyz ) * ambient, shape_color.w * tex_color.w ); 
+                // Compute the final color with contributions from lights:
+                gl_FragColor.xyz += phong_model_lights( normalize( bumped_N ), vertex_worldspace );
+              } `;
     }
 }
 
