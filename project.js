@@ -3,7 +3,7 @@ import {defs, tiny} from './examples/common.js';
 const {
     Vector, Vector3, vec, vec3, vec4, color, hex_color, Shader, Texture, Matrix, Mat4, Light, Shape, Material, Scene,
 } = tiny;
-const scale_factor = 10;
+const scale_factor = 40;
 
 
 export class Project extends Scene {
@@ -29,12 +29,15 @@ export class Project extends Scene {
                 normal_texture: new Texture('../assets/NormalMap.jpg') ,
                 dist: 1,
             }),
-            grass_new: new Material(new defs.Phong_Shader(),
-            {ambient: 1, diffusivity: 0, specularity: 0, color: hex_color("#00ff80")}),
             walls: new Material(new defs.Phong_Shader(),
                 {ambient: 1, diffusivity: 0, specularity: 0, color: hex_color("#0080ff")}),
             ball: new Material(new defs.Phong_Shader(),
                 {ambient: 1, diffusivity: 0, specularity: 0, color: hex_color("#ffffff")}),
+            background: new Material(new defs.Textured_Phong(), {
+                    ambient: 1,
+                    texture: new Texture('../assets/background.jpg'), 
+                }),
+
         }
 
         this.initial_camera_location = Mat4.look_at(vec3(0, 10, -scale_factor/2), vec3(0, 0, scale_factor), vec3(0, 1, 0)); //eye, poi, up
@@ -113,10 +116,12 @@ export class Project extends Scene {
 
         let model_transform = Mat4.identity();
         let ground_transform = model_transform.times(Mat4.rotation(Math.PI/2,1,0,0)).times(Mat4.scale(scale_factor,scale_factor,1));
-        let wall_transform1 = model_transform.times(Mat4.translation(0,scale_factor,scale_factor)).times(Mat4.scale(scale_factor,scale_factor,1));
-        let wall_transform2 = model_transform.times(Mat4.translation(scale_factor,scale_factor,0)).times(Mat4.rotation(Math.PI/2,0,1,0)).times(Mat4.scale(scale_factor,scale_factor,1));
-        let wall_transform3 = model_transform.times(Mat4.translation(-scale_factor,scale_factor,0)).times(Mat4.rotation(Math.PI/2,0,1,0)).times(Mat4.scale(scale_factor,scale_factor,1));
-        let wall_transform4 = model_transform.times(Mat4.translation(0,scale_factor,0)).times(Mat4.rotation(Math.PI/2,1,0,0)).times(Mat4.scale(scale_factor,scale_factor,1));
+        let background_transform = model_transform.times(Mat4.scale(scale_factor,scale_factor,scale_factor).times(Mat4.rotation(Math.PI,0,1,0)));
+        
+        // let wall_transform1 = model_transform.times(Mat4.translation(0,scale_factor,scale_factor)).times(Mat4.scale(scale_factor,scale_factor,1));
+        // let wall_transform2 = model_transform.times(Mat4.translation(scale_factor,scale_factor,0)).times(Mat4.rotation(Math.PI/2,0,1,0)).times(Mat4.scale(scale_factor,scale_factor,1));
+        // let wall_transform3 = model_transform.times(Mat4.translation(-scale_factor,scale_factor,0)).times(Mat4.rotation(Math.PI/2,0,1,0)).times(Mat4.scale(scale_factor,scale_factor,1));
+        // let wall_transform4 = model_transform.times(Mat4.translation(0,scale_factor,0)).times(Mat4.rotation(Math.PI/2,1,0,0)).times(Mat4.scale(scale_factor,scale_factor,1));
         let ball_transform = model_transform;
         ball_transform = ball_transform.times(ball_location);
 
@@ -151,10 +156,12 @@ export class Project extends Scene {
         // Draw ground                          
         // this.shapes.grass.draw(context, program_state, ground_transform, this.materials.grass.override({dist: 1 / (ground_length / texture_scale)}));
         this.shapes.grass.draw(context,program_state,ground_transform,this.materials.grass);
-        this.shapes.square.draw(context,program_state,wall_transform1,this.materials.walls);
-        this.shapes.square.draw(context, program_state, wall_transform2, this.materials.walls);
-        this.shapes.square.draw(context, program_state, wall_transform3, this.materials.walls);
-        this.shapes.square.draw(context, program_state, wall_transform4, this.materials.walls);
+        this.shapes.sphere.draw(context,program_state,background_transform,this.materials.background);
+
+        // this.shapes.square.draw(context,program_state,wall_transform1,this.materials.walls);
+        // this.shapes.square.draw(context, program_state, wall_transform2, this.materials.walls);
+        // this.shapes.square.draw(context, program_state, wall_transform3, this.materials.walls);
+        // this.shapes.square.draw(context, program_state, wall_transform4, this.materials.walls);
         this.shapes.sphere.draw(context,program_state,ball_transform,this.materials.ball);
 
         // adding shape to terrain - testing
