@@ -6,7 +6,7 @@ const {
 const scale_factor = 500;
 
 
-export class Assignment3 extends Scene {
+export class Project extends Scene {
     constructor() {
         // constructor(): Scenes begin by populating initial values like the Shapes and Materials they'll need.
         super();
