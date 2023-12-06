@@ -14,8 +14,8 @@ export class Assignment3 extends Scene {
         // At the beginning of our program, load one of each of these shape definitions onto the GPU.
         this.shapes = {
             sphere: new defs.Subdivision_Sphere(4),
-            square: new defs.Square()
-
+            square: new defs.Square(),
+            power_bar: new defs.Square()
         };
 
         // *** Materials
@@ -30,23 +30,38 @@ export class Assignment3 extends Scene {
                 {ambient: 1, diffusivity: 0, specularity: 0, color: hex_color("#ffffff")}),
         }
 
-        this.initial_camera_location = Mat4.look_at(vec3(0, 10, -scale_factor/2), vec3(0, 0, scale_factor), vec3(0, 1, 0)); //eye, poi, up
+        this.initial_camera_location = Mat4.look_at(vec3(0, 10, -scale_factor/10), vec3(0, 0, scale_factor), vec3(0, 1, 0)); //eye, poi, up
         console.log(this.initial_camera_location)
         this.ball_position;
         this.ball_cam;
         this.been_hit = false;
+        this.power = 0.5;
+        this.time_hit;
  ;   }
 
-    make_control_ptanel() {
+    make_control_panel() {
         // Draw the scene's buttons, setup their actions and keyboard shortcuts, and monitor live measurements.
         this.key_triggered_button("Reset Camera", ["Control", "0"], () => this.attached = () => this.initial_camera_location);
+        this.key_triggered_button("Power Up", ["w"], () => {
+            this.power += 0.1;
+        })
+        this.key_triggered_button("Power Down", ["s"], () => {
+            this.power -= 0.1;
+        })
+        this.key_triggered_button("Hit Ball", ["q"], () => {
+            this.been_hit = true;
+        })
+        this.key_triggered_button("Replay", ["r"], () => {
+            this.been_hit = false;
+            this.time_hit = undefined;
+        })
     }
 
     display(context, program_state) {
         // display():  Called once per frame of animation.
         // Setup -- This part sets up the scene's overall camera matrix, projection matrix, and lights:
         if (!context.scratchpad.controls) {
-            this.children.push(context.scratchpad.controls = new defs.Movement_Controls());
+            // this.children.push(context.scratchpad.controls = new defs.Movement_Controls());
             // Define the global camera and projection matrices, which are stored in program_state.
             program_state.camera_inverse = this.initial_camera_location;
         }
@@ -60,8 +75,8 @@ export class Assignment3 extends Scene {
         // Physics
 
         // get initial velocity and direction info (based on power +club + direction inputs)
-        let velocity = 20;       // based on power input
-        let phi = Math.PI/4;    // angle from vertical, based on club input
+        let velocity = 23;       // based on power input
+        let phi = Math.PI/3;    // angle from vertical, based on club input
         let theta = Math.PI/8;          // angle from z axis, based on direction input
         // if the position & movement aren't set, initialize them
         if(typeof this.ball_position === 'undefined' || this.been_hit === false){
@@ -146,16 +161,20 @@ export class Assignment3 extends Scene {
         let ball_transform = model_transform;
         ball_transform = ball_transform.times(ball_location);
 
-        // set camera to follow ball
-        // if (t > 0.5){
-        //     this.been_hit = true
-        // }
         if (this.been_hit){
-            let eye = vec3(this.ball_position[0],this.ball_position[1]+5,this.ball_position[2] - 20);
-            let poi = this.ball_position;
-            let top = vec3(0, 1, 0)
-            this.ball_cam = Mat4.look_at(eye, poi, top)
-            program_state.camera_inverse = this.ball_cam;
+            // update time_hit if needed
+            if (this.time_hit == null){
+                this.time_hit = t
+            }
+            
+            // start following ball 0.5 seconds after hit
+            if (t - this.time_hit > 0.5){
+                let eye = vec3(this.ball_position[0],this.ball_position[1]+5,this.ball_position[2] - 20);
+                let poi = this.ball_position;
+                let top = vec3(0, 1, 0)
+                this.ball_cam = Mat4.look_at(eye, poi, top)
+                program_state.camera_inverse = this.ball_cam;
+            }
         }
         else{
             // alert('here')
@@ -164,7 +183,7 @@ export class Assignment3 extends Scene {
 
         program_state.lights = [new Light(light_position, hex_color("#80FFFF"), 10 ** 1)];
 
-        this.shapes.square.draw(context,program_state,ground_transform,this.materials.grass);
+        this.shapes.square.draw(context,program_state,ground_transform,this.materials.grass_new);
         this.shapes.square.draw(context,program_state,wall_transform1,this.materials.walls);
         this.shapes.square.draw(context, program_state, wall_transform2, this.materials.walls);
         this.shapes.square.draw(context, program_state, wall_transform3, this.materials.walls);
@@ -172,7 +191,6 @@ export class Assignment3 extends Scene {
         this.shapes.sphere.draw(context,program_state,ball_transform,this.materials.ball);
 
         let test_transform = model_transform.times(Mat4.translation(0,1,1));
-        this.shapes.sphere.draw(context, program_state, test_transform, this.materials.ball)
     }
 }
 
