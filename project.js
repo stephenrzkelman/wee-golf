@@ -17,7 +17,8 @@ const {
   Material,
   Scene,
 } = tiny;
-const scale_factor = 40;
+const scale_factor = 700;
+const initial_ball_position = [0, 1, 0] //can't be vec3 because of object assignment bs 
 
 export class Project extends Scene {
   constructor() {
@@ -33,6 +34,7 @@ export class Project extends Scene {
       hole: new defs.Torus(15, 15),
       flagpole: new defs.Capped_Cylinder(15, 15),
       flag: new defs.Square(),
+      power_arrow: new defs.Cube()
     };
     // this.shapes.grass.arrays.texture_coord = this.shapes.grass.arrays.texture_coord.map(coord => coord.times(2));
 
@@ -86,37 +88,135 @@ export class Project extends Scene {
         specularity: 0,
         color: hex_color("#ff0000"),
       }),
+      power_arrow: new Material(new defs.Phong_Shader(), {
+        ambient: 1,
+        diffusivity: 0,
+        specularity: 0,
+        color: hex_color("#ff0000")
+      })
     };
 
-    this.initial_camera_location = Mat4.look_at(
-      vec3(0, 10, -scale_factor / 2),
-      vec3(0, 0, scale_factor),
-      vec3(0, 1, 0)
-    ); //eye, poi, up
-    console.log(this.initial_camera_location);
-    this.ball_position;
-    this.ball_cam;
+    // this.initial_camera_location = Mat4.look_at(vec3(0, 5, -30), vec3(0, 0, scale_factor), vec3(0, 1, 0)); //eye, poi, up
+    this.ball_position = vec3(initial_ball_position[0], initial_ball_position[1], initial_ball_position[2]); // set initial ball position to 0
     this.been_hit = false;
+    this.power = 1; 
+    this.theta = 0; // angle from z axis, based on direction input
+    this.theta_adjust = 0
+    this.phi = Math.PI / 6; // angle from y axis
+    this.hole_location = [0, 0, 30]
+
+    // set initial camera
+    let eye = this.get_camera_location()
+    let poi = this.hole_location
+    let up = vec3(0, 1, 0)
+    this.initial_camera_location = Mat4.look_at(vec3(eye[0], eye[1], eye[2]), vec3(poi[0], poi[1], poi[2]), up)
   }
 
   make_control_panel() {
     // Draw the scene's buttons, setup their actions and keyboard shortcuts, and monitor live measurements.
-    this.key_triggered_button(
-      "Reset Camera",
-      ["Control", "0"],
-      () => (this.attached = () => this.initial_camera_location)
-    );
+    this.key_triggered_button("Reset Camera", ["Control", "0"], () => this.attached = () => this.initial_camera_location);
+    this.key_triggered_button("Power Up", ["q"], () => {
+        this.power += 0.075;
+    })
+    this.key_triggered_button("Power Down", ["e"], () => {
+        this.power -= 0.075;
+    })
+    this.key_triggered_button("Hit Ball", ["h"], () => {
+        this.been_hit = true;
+    })
+    this.key_triggered_button("Replay", ["r"], () => {
+        // debugger;
+        this.been_hit = false;
+        this.time_hit = undefined;
+        this.reset_ball()
+        this.power = 0.5;
+        this.theta = 0;
+        this.phi = Math.PI / 6;
+        console.log(initial_ball_position)
+    })
+    this.key_triggered_button("Aim Left", ['a'], () => {
+        if (this.is_ball_behind_hole()){
+            this.theta_adjust -= Math.PI * 2/ 90;
+        }
+        else{
+            this.theta_adjust += Math.PI * 2/ 90;
+        }
+    })
+    this.key_triggered_button("Aim Right", ['d'], () => {
+        if (this.is_ball_behind_hole()){
+            this.theta_adjust += Math.PI * 2/ 90;
+        }
+        else{
+            this.theta_adjust -= Math.PI * 2/ 90;
+        }
+    })
+    this.key_triggered_button("Aim Left (FAST)", ['Shift', 'A'], () => {
+        if (this.is_ball_behind_hole()){
+            this.theta_adjust -= Math.PI * 2/ 90 * 10;
+        }
+        else{
+            this.theta_adjust += Math.PI * 2/ 90 * 10;
+        }
+    })
+    this.key_triggered_button("Aim Right (FAST)", ['Shift', 'D'], () => {
+        if (this.is_ball_behind_hole()){
+            this.theta_adjust += Math.PI * 2/ 90 * 10;
+        }
+        else{
+            this.theta_adjust -= Math.PI * 2/ 90 * 10;
+        }
+    })
+    this.key_triggered_button("Aim Up", ['w'], () => {
+        // this.phi = Math.min(this.phi + Math.PI * 2 / 90, Math.PI / 2);
+        this.phi += Math.PI * 2 / 90
+    })
+    this.key_triggered_button("Aim Down", ['s'], () => {
+        // this.phi = Math.max(this.phi - Math.PI * 2 / 90, 0);
+        this.phi -= Math.PI * 2 / 90
+    })
+  }
+
+  reset_ball(){
+    this.ball_position = vec3(initial_ball_position[0], initial_ball_position[1], initial_ball_position[2])
+  }
+
+  is_ball_behind_hole(){
+    // check if ball's z position is less than that of the hole
+    this.ball_position[2] < this.hole_location[2]
+  }
+
+  is_ball_still(){
+    for (let i = 0; i < 3; i++){
+        if (Math.abs(this.ball_velocity[i]) > 10 ** -4){
+            return false 
+        }
+    }
+    return true
+  }
+
+  get_camera_location(){
+    // use parametric line equation between two points (ball and hole), offset camera behind the ball
+
+    let x = this.ball_position[0]
+    let y = this.ball_position[1]
+    let z = this.ball_position[2]
+    let t = -1
+    let xt = (this.hole_location[0] - x) * (t * 0.5) + x 
+    let yt = (this.hole_location[1] - y) * t + y + 5
+    let zt = (this.hole_location[2] - z) * (t * 0.5) + z 
+    return [xt, yt, zt]
   }
 
   display(context, program_state) {
     // display():  Called once per frame of animation.
     // Setup -- This part sets up the scene's overall camera matrix, projection matrix, and lights:
     if (!context.scratchpad.controls) {
+      // Define the global camera and projection matrices, which are stored in program_state.
       this.children.push(
         (context.scratchpad.controls = new defs.Movement_Controls())
       );
-      // Define the global camera and projection matrices, which are stored in program_state.
-      program_state.camera_inverse = this.initial_camera_location;
+        // context.scratchpad.controls = 1 //not sure if this is needed or not
+        program_state.camera_inverse = this.initial_camera_location; // set iniital camera 
     }
 
     program_state.projection_transform = Mat4.perspective(
@@ -126,18 +226,19 @@ export class Project extends Scene {
       1000
     );
 
-    // lighting
+    // Lighting
     const light_position = vec4(0, 5, 5, 1); // The parameters of the Light are: position, color, size
 
     // Physics
 
     // get initial velocity and direction info (based on power +club + direction inputs)
-    let velocity = 20; // based on power input
-    let phi = Math.PI / 4; // angle from vertical, based on club input
-    let theta = Math.PI / 8; // angle from z axis, based on direction input
+    let velocity = 10 * this.power; // based on power input
+    let phi = this.phi; // angle from vertical, based on club input
+    let theta = this.theta + this.theta_adjust; // angle from z axis, based on direction input
+
     // if the position & movement aren't set, initialize them
     if (typeof this.ball_position === "undefined" || this.been_hit === false) {
-      this.ball_position = vec3(0, 1, 0); // set initial ball position to 0
+    //   this.ball_position = vec3(0, 1, 0); // set initial ball position to 0
       let x_initial_velocity = velocity * Math.sin(phi) * Math.sin(theta);
       let y_initial_velocity = velocity * Math.cos(phi);
       let z_initial_velocity = velocity * Math.sin(phi) * Math.cos(theta);
@@ -181,6 +282,9 @@ export class Project extends Scene {
         this.ball_velocity[1] -= 1;
       }
     }
+
+    // update the ball's location
+    // console.log(this.ball_position)
     let ball_location = Mat4.identity().times(
       Mat4.translation(
         this.ball_position[0],
@@ -188,10 +292,11 @@ export class Project extends Scene {
         this.ball_position[2]
       )
     );
-    // this.ball_movement = vec3(x_change, y_change,)
+
     const t = program_state.animation_time / 1000,
       dt = program_state.animation_delta_time / 1000;
 
+    // compute transforms to position objects in space
     let model_transform = Mat4.identity();
     let ground_transform = model_transform
       .times(Mat4.rotation(Math.PI / 2, 1, 0, 0))
@@ -208,47 +313,73 @@ export class Project extends Scene {
     let hill_2_transform = model_transform
       .times(Mat4.translation(-10, -1, 17))
       .times(Mat4.scale(9, 4, 6));
+
+    // set hole location
     let hole_transform = model_transform
-      .times(Mat4.translation(0, -0.5, 30))
+      .times(Mat4.translation(this.hole_location[0], this.hole_location[1]-0.5, this.hole_location[2]))
       .times(Mat4.rotation(Math.PI / 2, 1, 0, 0))
       .times(Mat4.scale(2.7, 2.7, 2.7));
     let hole_marker_transform = model_transform
-      .times(Mat4.translation(0, -9.89, 30))
+      .times(Mat4.translation(this.hole_location[0], this.hole_location[1]-9.89, this.hole_location[2]))
       .times(Mat4.scale(10, 10, 10));
     let flagpole_transform = model_transform
-      .times(Mat4.translation(0, 0, 31.5))
+      .times(Mat4.translation(this.hole_location[0], this.hole_location[1], this.hole_location[2] + 1.5))
       .times(Mat4.rotation(Math.PI / 2, 1, 0, 0))
       .times(Mat4.scale(0.1, 0.1, 20));
     let flag_transform = model_transform
-      .times(Mat4.translation(-1, 9.5, 31.5))
+      .times(Mat4.translation(this.hole_location[0] - 1, this.hole_location[0] + 9.5, this.hole_location[2] + 1.5))
       .times(Mat4.scale(1, 0.5, 1));
-    //   .times(Mat4.translation(0, 0, 10))
-    //   .times(Mat4.scale(1, 1, 1));
-
-    // let wall_transform1 = model_transform.times(Mat4.translation(0,scale_factor,scale_factor)).times(Mat4.scale(scale_factor,scale_factor,1));
-    // let wall_transform2 = model_transform.times(Mat4.translation(scale_factor,scale_factor,0)).times(Mat4.rotation(Math.PI/2,0,1,0)).times(Mat4.scale(scale_factor,scale_factor,1));
-    // let wall_transform3 = model_transform.times(Mat4.translation(-scale_factor,scale_factor,0)).times(Mat4.rotation(Math.PI/2,0,1,0)).times(Mat4.scale(scale_factor,scale_factor,1));
-    // let wall_transform4 = model_transform.times(Mat4.translation(0,scale_factor,0)).times(Mat4.rotation(Math.PI/2,1,0,0)).times(Mat4.scale(scale_factor,scale_factor,1));
+    
     let ball_transform = model_transform;
     ball_transform = ball_transform.times(ball_location);
 
-    // set camera to follow ball
-    // if (t > 0.5){
-    //     this.been_hit = true
-    // }
-    if (this.been_hit) {
-      let eye = vec3(
-        this.ball_position[0],
-        this.ball_position[1] + 5,
-        this.ball_position[2] - 20
-      );
-      let poi = this.ball_position;
-      let top = vec3(0, 1, 0);
-      this.ball_cam = Mat4.look_at(eye, poi, top);
-      program_state.camera_inverse = this.ball_cam;
-    } else {
-      // alert('here')
-      program_state.camera_inverse = this.initial_camera_location;
+    let power_arrow_transform = model_transform;
+
+    // if ball has z value less than hole, orient arrow slightly differently
+
+    let angle = this.theta + this.theta_adjust
+    power_arrow_transform = ball_transform  
+    .times(Mat4.rotation(angle, 0, 1, 0)) //angle left and right about y axis
+    .times(Mat4.rotation(-this.phi, 1, 0, 0)) //angle above xz plane
+    .times(Mat4.scale(0.25, 0.25, 5 * this.power))
+    .times(Mat4.translation(0, 1, 1))
+
+    // update the camera 
+    if (this.been_hit){
+        // update time_hit if needed
+        if (this.time_hit == null){
+            this.time_hit = t
+        }
+        
+        // start following ball 0.5 seconds after hit
+        if (t - this.time_hit > 0.3){
+            let eye;
+            if (this.ball_position[2] < this.hole_location[2]){
+                eye = vec3(this.ball_position[0],this.ball_position[1]+5,this.ball_position[2] - 20);
+            }
+            else{
+                eye = vec3(this.ball_position[0],this.ball_position[1]+5,this.ball_position[2] + 20);
+            }
+            let poi = this.ball_position;
+            let top = vec3(0, 1, 0)
+            this.follow_ball_cam = Mat4.look_at(eye, poi, top)
+            program_state.camera_inverse = this.follow_ball_cam;
+        }
+
+        // reset camera once ball stops moving
+        if (this.is_ball_still()){
+            this.been_hit = false
+
+            // TODO: set camera to be behind ball, pointed towards the flag 
+        }
+    }
+    else{
+        // alert('here')
+        let eye = this.get_camera_location()
+        let poi = this.hole_location
+        let top = vec3(0, 1, 0);
+        this.ball_cam = Mat4.look_at(vec3(eye[0], eye[1], eye[2]), vec3(poi[0], poi[1], poi[2]), top)
+        program_state.camera_inverse = this.ball_cam
     }
 
     program_state.lights = [
@@ -277,7 +408,6 @@ export class Project extends Scene {
     }
 
     // Draw ground
-    // this.shapes.grass.draw(context, program_state, ground_transform, this.materials.grass.override({dist: 1 / (ground_length / texture_scale)}));
     this.shapes.grass.draw(
       context,
       program_state,
@@ -291,10 +421,6 @@ export class Project extends Scene {
       this.materials.background
     );
 
-    // this.shapes.square.draw(context,program_state,wall_transform1,this.materials.walls);
-    // this.shapes.square.draw(context, program_state, wall_transform2, this.materials.walls);
-    // this.shapes.square.draw(context, program_state, wall_transform3, this.materials.walls);
-    // this.shapes.square.draw(context, program_state, wall_transform4, this.materials.walls);
     this.shapes.sphere.draw(
       context,
       program_state,
@@ -344,8 +470,15 @@ export class Project extends Scene {
       this.materials.flag
     );
 
-    // let test_transform = model_transform.times(Mat4.translation(0,1,1));
-    // this.shapes.sphere.draw(context, program_state, test_transform, this.materials.ball)
+    // draw assets to shoot
+    if (! this.been_hit){
+        this.shapes.power_arrow.draw(
+            context,
+            program_state,
+            power_arrow_transform,
+            this.materials.power_arrow
+        )
+    }
   }
 }
 
