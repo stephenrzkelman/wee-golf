@@ -245,7 +245,7 @@ export class Project extends Scene {
     // Physics
 
     // get initial velocity and direction info (based on power +club + direction inputs)
-    let velocity = 10 * this.power; // based on power input
+    let velocity = physics.max_velocity * this.power; // based on power input
     let phi = this.phi; // angle from vertical, based on club input
     let theta = this.theta + this.theta_adjust; // angle from z axis, based on direction input
 
