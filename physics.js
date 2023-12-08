@@ -181,7 +181,7 @@ function ball_hole_collision(ball_prev_center, ball_prev_velocity, motion_type, 
     let from_hole = ball_prev_center.minus(ball_hole_location);
     let a = ball_prev_velocity.dot(ball_prev_velocity);
     let b = 2*from_hole.dot(ball_prev_velocity);
-    let c = from_hole.dot(from_hole)-2;
+    let c = from_hole.dot(from_hole)-1;
     let ts = solve_quadratic(a,b,c);
     // true only if we crossed through hole sphere
     console.log("Solutions: "+ts[0]+", "+ts[1]);
