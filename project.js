@@ -35,7 +35,8 @@ export class Project extends Scene {
       hole: new defs.Torus(15, 15),
       flagpole: new defs.Capped_Cylinder(15, 15),
       flag: new defs.Square(),
-      power_arrow: new defs.Cube()
+      power_arrow: new defs.Cube(),
+      end_rectangle: new defs.Square()
     };
     // this.shapes.grass.arrays.texture_coord = this.shapes.grass.arrays.texture_coord.map(coord => coord.times(2));
 
@@ -100,12 +101,33 @@ export class Project extends Scene {
         diffusivity: 0,
         specularity: 0,
         color: hex_color("#ff0000")
+      }),
+      end_screen: new Material(new defs.Textured_Phong(), {
+          ambient: 1,
+          texture: new Texture("../assets/one.png")
+      }),
+      end_screen2: new Material(new defs.Textured_Phong(), {
+        ambient: 1,
+        texture: new Texture("../assets/two.png")
+    }),
+      end_screen3: new Material(new defs.Textured_Phong(), {
+        ambient: 1,
+        texture: new Texture("../assets/three.png")
+    }),
+    end_screen4: new Material(new defs.Textured_Phong(), {
+      ambient: 1,
+      texture: new Texture("../assets/four.png")
+  }),
+      par: new Material(new defs.Textured_Phong(), {
+          ambient: 1,
+          texture: new Texture("../assets/par.png")
       })
     };
 
     // this.initial_camera_location = Mat4.look_at(vec3(0, 5, -30), vec3(0, 0, scale_factor), vec3(0, 1, 0)); //eye, poi, up
     this.ball_position = vec3(initial_ball_position[0], initial_ball_position[1], initial_ball_position[2]); // set initial ball position to 0
     this.been_hit = false;
+    this.stroke_count = 0;
     this.power = 1; 
     this.theta = 0; // angle from z axis, based on direction input
     this.theta_adjust = 0
@@ -139,11 +161,13 @@ export class Project extends Scene {
         this.power -= 0.075;
     })
     this.key_triggered_button("Hit Ball", ["h"], () => {
+        this.stroke_count += 1;
         this.been_hit = true;
     })
     this.key_triggered_button("Replay", ["r"], () => {
         // debugger;
         this.been_hit = false;
+        this.stroke_count = 0;
         this.time_hit = undefined;
         this.reset_ball()
         this.power = 0.5;
@@ -185,11 +209,11 @@ export class Project extends Scene {
     })
     this.key_triggered_button("Aim Up", ['w'], () => {
         // this.phi = Math.min(this.phi + Math.PI * 2 / 90, Math.PI / 2);
-        this.phi = Math.max(this.phi - Math.PI * 2 / 90, 0)
+        this.phi -= Math.PI * 2 / 90
     })
     this.key_triggered_button("Aim Down", ['s'], () => {
         // this.phi = Math.max(this.phi - Math.PI * 2 / 90, 0);
-        this.phi = Math.min(this.phi + Math.PI * 2 / 90, Math.PI/2)
+        this.phi += Math.PI * 2 / 90
     })
     this.key_triggered_button("Aim Up (FAST)", ['Shift', 'W'], () => {
       // this.phi = Math.min(this.phi + Math.PI * 2 / 90, Math.PI / 2);
@@ -343,6 +367,11 @@ export class Project extends Scene {
     .times(Mat4.scale(0.25, 0.25, 5 * this.power))
     .times(Mat4.translation(0, 1, 1))
 
+
+    let end_transform = model_transform.times(Mat4.translation(this.hole_location[0],this.hole_location[1]+1,this.hole_location[2])).times(Mat4.rotation(Math.PI,0,0,1)).times(Mat4.rotation(Math.PI/2,1,0,0)).times(Mat4.scale(2,1,1));
+    let par_transform = model_transform.times(Mat4.translation(-4.5,3.5,-7)).times(Mat4.rotation(Math.PI,0,1,0));
+
+
     // update the camera 
     if (this.been_hit){
         // update time_hit if needed
@@ -479,15 +508,57 @@ export class Project extends Scene {
       this.materials.flag
     );
 
-    // draw assets to shoot
-    if (! this.been_hit){
-        this.shapes.power_arrow.draw(
-            context,
-            program_state,
-            power_arrow_transform,
-            this.materials.power_arrow
+    if (this.ball_position[0] == this.hole_location[0] && this.ball_position[2] == this.hole_location[2]) {
+      if (this.stroke_count == 1) {
+        this.shapes.end_rectangle.draw(
+          context,
+          program_state,
+          end_transform,
+          this.materials.end_screen
+        );
+      }
+      else if (this.stroke_count == 2) {
+        this.shapes.end_rectangle.draw(
+          context,
+          program_state,
+          end_transform,
+          this.materials.end_screen2
+        );
+      }
+      else if (this.stroke_count == 3) {
+        this.shapes.end_rectangle.draw(
+          context,
+          program_state,
+          end_transform,
+          this.materials.end_screen3
+        );
+      }
+      else if (this.stroke_count == 4) {
+        this.shapes.end_rectangle.draw(
+          context,
+          program_state,
+          end_transform,
+          this.materials.end_screen4
         )
+      }
+
+    } else {
+      // draw assets to shoot
+      if (! this.been_hit){
+          this.shapes.power_arrow.draw(
+              context,
+              program_state,
+              power_arrow_transform,
+              this.materials.power_arrow
+          )
+        }
     }
+    this.shapes.end_rectangle.draw(
+      context,
+      program_state,
+      par_transform,
+      this.materials.par
+    )
   }
 }
 
