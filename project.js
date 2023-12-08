@@ -42,7 +42,7 @@ export class Project extends Scene {
 
     // *** Materials
     this.materials = {
-      grass: new Material(new defs.Normal_Textured_Phong(), {
+      grass: new Material(new defs.Real_Bump(), {
         ambient: 1,
         texture: new Texture("../assets/grass.jpeg"),
         normal_texture: new Texture("../assets/NormalMap.jpg"),
@@ -228,9 +228,6 @@ export class Project extends Scene {
       1000
     );
 
-    // Lighting
-    const light_position = vec4(0, 5, 5, 1); // The parameters of the Light are: position, color, size
-
     // Physics
 
     // get initial velocity and direction info (based on power +club + direction inputs)
@@ -384,14 +381,15 @@ export class Project extends Scene {
         program_state.camera_inverse = this.ball_cam
     }
 
+    // Lighting
+    const light_position = vec4(this.ball_position[0], this.ball_position[1], this.ball_position[2], 1); // The parameters of the Light are: position, color, size
     program_state.lights = [
-      new Light(light_position, hex_color("#80FFFF"), 10 ** 1),
+      new Light(light_position, hex_color("#80FFFF"), 10 ** 3),
     ];
 
     let ground_width = 80;
     let ground_length = 200;
     const texture_scale = 10;
-
     // Scale the texture coordinates:
     for (let i = 0; i < this.shapes.grass.arrays.texture_coord.length; i++) {
       this.shapes.grass.arrays.texture_coord[i][0] *=

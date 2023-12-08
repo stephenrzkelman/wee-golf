@@ -840,11 +840,8 @@ const Textured_Phong = defs.Textured_Phong =
     }
 
 
-const Normal_Textured_Phong = defs.Normal_Textured_Phong =
-    class Normal_Textured_Phong extends Phong_Shader {
-        // **Textured_Phong** is a Phong Shader extended to addditionally decal a
-        // texture image over the drawn shape, lined up according to the texture
-        // coordinates that are stored at each shape vertex.
+const Real_Bump = defs.Real_Bump =
+    class Real_Bump extends Textured_Phong {
         vertex_glsl_code() {
             // ********* VERTEX SHADER *********
             return this.shared_glsl_code() + `
