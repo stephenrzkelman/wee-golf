@@ -31,7 +31,7 @@ export class Project extends Scene {
     this.shapes = {
       sphere: new defs.Subdivision_Sphere(4),
       grass: new defs.Normal_Square(),
-      hill: new defs.Subdivision_Sphere(4),
+      hill: new defs.Normal_Subdivision_Sphere(4),
       square: new defs.Square(),
       hole: new defs.Torus(15, 15),
       flagpole: new defs.Capped_Cylinder(15, 15),
@@ -384,12 +384,12 @@ export class Project extends Scene {
     // Lighting
     const light_position = vec4(this.ball_position[0], this.ball_position[1], this.ball_position[2], 1); // The parameters of the Light are: position, color, size
     program_state.lights = [
-      new Light(light_position, hex_color("#80FFFF"), 10 ** 3),
+      new Light(light_position, hex_color("#80FFFF"), 10 ** 2.5),
     ];
 
     let ground_width = 80;
     let ground_length = 200;
-    const texture_scale = 10;
+    const texture_scale = 5;
     // Scale the texture coordinates:
     for (let i = 0; i < this.shapes.grass.arrays.texture_coord.length; i++) {
       this.shapes.grass.arrays.texture_coord[i][0] *=
@@ -432,14 +432,14 @@ export class Project extends Scene {
       context,
       program_state,
       hill_1_transform,
-      this.materials.hill
+      this.materials.grass
     );
 
     this.shapes.hill.draw(
       context,
       program_state,
       hill_2_transform,
-      this.materials.hill
+      this.materials.grass
     );
 
     this.shapes.hole.draw(
