@@ -68,53 +68,26 @@ const Normal_Square = defs.Normal_Square =
             const normals = Vector3.cast([0, 0, 1], [0, 0, 1], [0, 0, 1], [0, 0, 1]);
             const texture_coords = Vector3.cast([0, 0], [1, 0], [0, 1], [1, 1]);
             const indices = [0, 1, 2, 3, 1, 2];
-            const tangents = Vector3.cast([0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]);
 
             // Calculate tangents
-            for (let i = 0; i < indices.length - 2; i+=3) {
-                const i0 = indices[i];
-                const i1 = indices[i + 1];
-                const i2 = indices[i + 2];
+            const edge1 = positions[0].minus(positions[2]);
+            const edge2 = positions[1].minus(positions[2]);
+            const deltaUV1 = texture_coords[0].minus(texture_coords[2]);
+            const deltaUV2 = texture_coords[1].minus(texture_coords[2]);
+            const f = 1 / (deltaUV1[0] * deltaUV2[1] - deltaUV2[0] * deltaUV1[1]);
+            const tangent1 = [0, 0, 0];
+            tangent1[0] = f * (deltaUV2[1] * edge1[0] - deltaUV1[1] * edge2[0]);
+            tangent1[1] = f * (deltaUV2[1] * edge1[1] - deltaUV1[1] * edge2[1]);
+            tangent1[2] = f * (deltaUV2[1] * edge1[2] - deltaUV1[1] * edge2[2]);
 
-                if (i0 === i1 || i1 === i2 || i0 === i2) continue;
-
-                const edge1 = positions[indices[i1]]?.minus(positions[i0]);
-                const edge2 = positions[indices[i2]]?.minus(positions[i0]);
-
-                if (edge1 && edge2) {
-                    const deltaU1 = texture_coords[i1][0] - texture_coords[i0][0];
-                    const deltaV1 = texture_coords[i1][1] - texture_coords[i0][1];
-                    const deltaU2 = texture_coords[i2][0] - texture_coords[i0][0];
-                    const deltaV2 = texture_coords[i2][1] - texture_coords[i0][1];
-                    
-                    const denom = (deltaU1 * deltaV2 - deltaU2 * deltaV1);
-
-                    if (denom !== 0) {
-                        const f = 1 / denom;
-                        const tangent = [0, 0, 0];
-                        tangent[0] = f * (deltaV2 * edge1[0] - deltaV1 * edge2[0]);
-                        tangent[1] = f * (deltaV2 * edge1[1] - deltaV1 * edge2[1]);
-                        tangent[2] = f * (deltaV2 * edge1[2] - deltaV1 * edge2[2]);
-                        
-                        tangents[i0] = tangents[i0].plus(vec3(...tangent));
-                        tangents[i1] = tangents[i1].plus(vec3(...tangent));
-                        tangents[i2] = tangents[i2].plus(vec3(...tangent));
-                    }
-                }
-            }
-            
-            // Normalize each tangent
-            for (let i = 0; i < tangents.length; i++) {
-                tangents[i].normalize();
-            }
-            
             // Specify the 4 square corner locations, and match those up with normal vectors:
             this.arrays.position = positions;
             this.arrays.normal = normals;
             // Arrange the vertices into a square shape in texture space too:
             this.arrays.texture_coord = texture_coords;
-            this.arrays.tangents = tangents;
-            this.indices.push(...indices);
+            // Use two triangles this time, indexing into four distinct vertices:
+            this.arrays.tangents = Vector3.cast(tangent1, tangent1, tangent1, tangent1);
+            this.indices.push(0, 1, 2, 1, 3, 2);
         }
     }
 
