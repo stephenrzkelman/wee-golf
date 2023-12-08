@@ -135,9 +135,6 @@ export class Project extends Scene {
     this.key_triggered_button("Power Up", ["q"], () => {
         this.power += 0.075;
     })
-    this.key_triggered_button("step", ["c"], () => {
-      this.step=true;
-  })
     this.key_triggered_button("Power Down", ["e"], () => {
         this.power -= 0.075;
     })
@@ -249,7 +246,7 @@ export class Project extends Scene {
     // Physics
 
     // get initial velocity and direction info (based on power +club + direction inputs)
-    let velocity = 10 * this.power; // based on power input
+    let velocity = physics.max_velocity * this.power; // based on power input
     let phi = this.phi; // angle from vertical, based on club input
     let theta = this.theta + this.theta_adjust; // angle from z axis, based on direction input
 
@@ -269,14 +266,11 @@ export class Project extends Scene {
     }
     // otherwise, update them
     else {
-      if(this.step){
-        let new_pv = physics.update_motion(this.ball_position, this.ball_velocity, this.hills, this.hole_location);
-        this.ball_position = new_pv["position"];
-        this.ball_velocity = new_pv["velocity"];
-        console.log("position: "+this.ball_position);
-        console.log("velocity: "+this.ball_velocity);
-        this.step = false;
-      }
+      let new_pv = physics.update_motion(this.ball_position, this.ball_velocity, this.hills, this.hole_location);
+      this.ball_position = new_pv["position"];
+      this.ball_velocity = new_pv["velocity"];
+      console.log("position: "+this.ball_position);
+      console.log("velocity: "+this.ball_velocity);
     }
 
     // update the ball's location

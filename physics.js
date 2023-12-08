@@ -17,6 +17,11 @@ const {
     Scene,
   } = tiny;
 
+const g = 0.001;
+const bounce_factor = 0.5;
+const friction_factor = 0.99;
+export const max_velocity = 0.2;
+
 function ball_ellipsoid_collision(
     ellipsoid_dimensions, 
     ellipsoid_center,
@@ -32,7 +37,7 @@ function ball_ellipsoid_collision(
     return (norm-1) < (10 ** -4);
 }
 
-export function ellipsoid_normal(
+function ellipsoid_normal(
     ellipsoid_dimensions,
     ellipsoid_center,
     point
@@ -92,11 +97,11 @@ function ball_ellipsoid_intersection(
             // 2: find the tangent plane at this point
             let normal = ellipsoid_normal(bigger_dimensions, vec3(0, 0, 0) ,linear_intersection);
             // 3: find intersection of quadratic with tangent plane
-            a = normal.dot(vec3(0,-0.5,0));
+            a = normal.dot(vec3(0,-g/2,0));
             b = normal.dot(ball_prev_velocity);
             c = normal.dot(ball_prev_center.minus(linear_intersection));
             let ts = solve_quadratic(a,b,c);
-            let quadratic_intersections = ts.map((t)=>vec3(0,-0.5,0).times(t**2)
+            let quadratic_intersections = ts.map((t)=>vec3(0,-g/2,0).times(t**2)
                 .plus(ball_prev_velocity.times(t))
                 .plus(ball_prev_center));
             let dist_0 = (quadratic_intersections[0].minus(linear_intersection)).norm();
@@ -133,14 +138,16 @@ function ball_ground_intersection(
 ){
     let time_to_collision;
     let accel;
+    // quadratic motion
     if(motion_type === "free"){
-        let discriminant = ball_prev_velocity[1] ** 2 + 2 * (ball_prev_center[1] - 1);
+        let discriminant = ball_prev_velocity[1] ** 2 + 2 * g * (ball_prev_center[1] - 1);
         // might be slightly less than 0 due to floating point errors
         discriminant = Math.max(discriminant, 0);
-        time_to_collision = ball_prev_velocity[1] + Math.sqrt(discriminant);
+        time_to_collision = (ball_prev_velocity[1] + Math.sqrt(discriminant))/g;
         // determine coordinates at time of collision
-        accel = vec3(0,-0.5,0);
+        accel = vec3(0,-g/2,0);
     }
+    // linear motion
     else{
         if(Math.abs(ball_prev_velocity[1]) < 10** -4){
             time_to_collision = 1;
@@ -159,20 +166,25 @@ function ball_ground_intersection(
 
 function ball_hole_collision(ball_prev_center, ball_prev_velocity, motion_type, hole_location){
     // no chip-ins/bounce-ins
-    if(motion_type === "free")
+    if(motion_type === "free"){
+        console.log("not rolling");
         return false;
+    }
     let speed = ball_prev_velocity.norm();
     // going too fast ==> misses the hole
-    if(speed > 5)
+    if(speed > 5){
+        console.log("too fast");
         return false;
+    }
     // otherwise, just check if we cross the hole
     let ball_hole_location = hole_location.plus(vec3(0,1,0));
     let from_hole = ball_prev_center.minus(ball_hole_location);
     let a = ball_prev_velocity.dot(ball_prev_velocity);
     let b = 2*from_hole.dot(ball_prev_velocity);
-    let c = from_hole.dot(from_hole)-1;
+    let c = from_hole.dot(from_hole)-2;
     let ts = solve_quadratic(a,b,c);
     // true only if we crossed through hole sphere
+    console.log("Solutions: "+ts[0]+", "+ts[1]);
     return (
         (ts[0] > -(10**-4) && (ts[0]-1) < 10**-4) ||
         (ts[1] > -(10**-4) && (ts[1]-1) < 10**-4)
@@ -232,7 +244,7 @@ function intermediate_velocity(ball_prev_center, ball_prev_velocity, motion_type
         else if(Math.abs(ball_prev_velocity[2]) > 10 ** -4){
             time_to_collision = (point[2] - ball_prev_center[2])/ball_prev_velocity[2];
         }
-        y_velocity_change = 0.5*(time_to_collision**2);
+        y_velocity_change = g/2*(time_to_collision**2);
     }
     return ball_prev_velocity.minus(vec3(0,y_velocity_change,0));
 }
@@ -242,7 +254,6 @@ function bounce(ball_prev_center, ball_prev_velocity, motion_type, point, normal
     let prebounce_velocity = intermediate_velocity(ball_prev_center, ball_prev_velocity, motion_type, point);
     // generate orthonormal basis around normal vector
     let basis_x = normal.normalized();
-    console.log("along normal: "+prebounce_velocity.dot(basis_x));
     // use flat vector to generate orthonormal basis, since no normal will ever be flat in our game
     let basis_y = basis_x.cross(vec3(1,0,0)).normalized();
     let basis_z = basis_x.cross(basis_y);
@@ -255,14 +266,15 @@ function bounce(ball_prev_center, ball_prev_velocity, motion_type, point, normal
     );
     let prebounce_velocity_normal_basis = (change_of_basis.times(prebounce_velocity)).to3();
     // apply the bounce
-    let postbounce_velocity_normal_basis = prebounce_velocity_normal_basis.times_pairwise(vec3(-0.25,0.9,0.9));
-    console.log("postbounce velocity normal basis "+postbounce_velocity_normal_basis);
+    let postbounce_velocity_normal_basis = prebounce_velocity_normal_basis.times_pairwise(vec3(-bounce_factor,friction_factor,friction_factor));
     // change back to regular coordinates
     let postbounce_velocity = Mat4.inverse(change_of_basis).times(postbounce_velocity_normal_basis).to3();
     return postbounce_velocity;
 }
 
 function roll(ball_prev_velocity, normal){
+    // apply gravity
+    ball_prev_velocity = ball_prev_velocity.plus(vec3(0,-g,0));
     // generate orthonormal basis around normal vector
     let basis_x = normal.normalized();
     let basis_y = basis_x.cross(vec3(1,0,0)).normalized();
@@ -275,15 +287,15 @@ function roll(ball_prev_velocity, normal){
     );
     let free_velocity_normal_basis = (change_of_basis.times(ball_prev_velocity)).to3();
     // roll
-    let rolling_velocity_normal_basis = free_velocity_normal_basis.times_pairwise(vec3(0,0.9,0.9));
+    let rolling_velocity_normal_basis = free_velocity_normal_basis.times_pairwise(vec3(0,friction_factor,friction_factor));
     // change back to regular coordinates
     let rolling_velocity = Mat4.inverse(change_of_basis).times(rolling_velocity_normal_basis).to3();
     return rolling_velocity;
 }
 
 function predict_motion(ball_prev_center, ball_prev_velocity, hole_location, hills){
-    let free_full_tick = ball_prev_center.plus(ball_prev_velocity).plus(vec3(0,-0.5,0));
-    let free_half_tick = ball_prev_center.plus(ball_prev_velocity.times(0.5)).plus(vec3(0,-0.125,0));
+    let free_full_tick = ball_prev_center.plus(ball_prev_velocity).plus(vec3(0,-g/2,0));
+    let free_half_tick = ball_prev_center.plus(ball_prev_velocity.times(0.5)).plus(vec3(0,-g/2*(0.25),0));
     // check if ball already is in hole
     if(ball_prev_center.equals(hole_location.plus(vec3(0,1,0)))){
         // if so, no motion
@@ -320,7 +332,6 @@ function predict_motion(ball_prev_center, ball_prev_velocity, hole_location, hil
         ball_ground_collision(free_half_tick)
     ){
         // if so, ball should roll across ground
-        console.log("rolling velocity: "+roll(ball_prev_velocity, vec3(0,1,0)));
         return {
             "type": "roll",
             "position": ball_prev_center.plus(
@@ -342,11 +353,8 @@ function predict_motion(ball_prev_center, ball_prev_velocity, hole_location, hil
 export function update_motion(ball_prev_center, ball_prev_velocity, hills, hole_location){
     let predicted_motion = predict_motion(ball_prev_center, ball_prev_velocity, hole_location, hills);
     let motion_type = predicted_motion["type"];
-    console.log(motion_type);
     let predicted_position = predicted_motion["position"];
-    console.log("predicted position: "+predicted_position);
     let predicted_velocity = predicted_motion["velocity"];
-    console.log("predicted_velocity: "+predicted_velocity);
     let collision_info = collision_detect(
         predicted_position, 
         motion_type,
@@ -356,7 +364,7 @@ export function update_motion(ball_prev_center, ball_prev_velocity, hills, hole_
         hills);
     // no collision
     if(collision_info === null){
-        let accel = (motion_type === "free") ? vec3(0,-1,0) : vec3(0,0,0);
+        let accel = (motion_type === "free") ? vec3(0,-g,0) : vec3(0,0,0);
         return{
             "position": predicted_position,
             "velocity": predicted_velocity.plus(accel)
