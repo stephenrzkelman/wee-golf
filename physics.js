@@ -17,10 +17,10 @@ const {
     Scene,
   } = tiny;
 
-const g = 0.1;
+const g = 0.01;
 const bounce_factor = 0.5;
-const friction_factor = 0.9;
-export const max_velocity = 3;
+const friction_factor = 0.99;
+export const max_velocity = 0.2;
 
 function ball_ellipsoid_collision(
     ellipsoid_dimensions, 
@@ -181,7 +181,7 @@ function ball_hole_collision(ball_prev_center, ball_prev_velocity, motion_type, 
     let from_hole = ball_prev_center.minus(ball_hole_location);
     let a = ball_prev_velocity.dot(ball_prev_velocity);
     let b = 2*from_hole.dot(ball_prev_velocity);
-    let c = from_hole.dot(from_hole)-2;
+    let c = from_hole.dot(from_hole)-1;
     let ts = solve_quadratic(a,b,c);
     // true only if we crossed through hole sphere
     console.log("Solutions: "+ts[0]+", "+ts[1]);
