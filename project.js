@@ -185,12 +185,20 @@ export class Project extends Scene {
     })
     this.key_triggered_button("Aim Up", ['w'], () => {
         // this.phi = Math.min(this.phi + Math.PI * 2 / 90, Math.PI / 2);
-        this.phi += Math.PI * 2 / 90
+        this.phi = Math.max(this.phi - Math.PI * 2 / 90, 0)
     })
     this.key_triggered_button("Aim Down", ['s'], () => {
         // this.phi = Math.max(this.phi - Math.PI * 2 / 90, 0);
-        this.phi -= Math.PI * 2 / 90
+        this.phi = Math.min(this.phi + Math.PI * 2 / 90, Math.PI/2)
     })
+    this.key_triggered_button("Aim Up (FAST)", ['Shift', 'W'], () => {
+      // this.phi = Math.min(this.phi + Math.PI * 2 / 90, Math.PI / 2);
+      this.phi = Math.max(this.phi - Math.PI * 2 / 90 * 5, 0)
+  })
+  this.key_triggered_button("Aim Down (FAST)", ['Shift', 'S'], () => {
+      // this.phi = Math.max(this.phi - Math.PI * 2 / 90, 0);
+      this.phi = Math.min(this.phi + Math.PI * 2 / 90 * 5, Math.PI/2)
+  })
   }
 
   reset_ball(){
