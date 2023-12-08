@@ -17,10 +17,10 @@ const {
     Scene,
   } = tiny;
 
-const g = 0.5;
+const g = 0.001;
 const bounce_factor = 0.5;
-const friction_factor = 0.9;
-export const max_velocity = 5;
+const friction_factor = 0.99;
+export const max_velocity = 0.2;
 
 function ball_ellipsoid_collision(
     ellipsoid_dimensions, 
@@ -166,20 +166,25 @@ function ball_ground_intersection(
 
 function ball_hole_collision(ball_prev_center, ball_prev_velocity, motion_type, hole_location){
     // no chip-ins/bounce-ins
-    if(motion_type === "free")
+    if(motion_type === "free"){
+        console.log("not rolling");
         return false;
+    }
     let speed = ball_prev_velocity.norm();
     // going too fast ==> misses the hole
-    if(speed > 5)
+    if(speed > 5){
+        console.log("too fast");
         return false;
+    }
     // otherwise, just check if we cross the hole
     let ball_hole_location = hole_location.plus(vec3(0,1,0));
     let from_hole = ball_prev_center.minus(ball_hole_location);
     let a = ball_prev_velocity.dot(ball_prev_velocity);
     let b = 2*from_hole.dot(ball_prev_velocity);
-    let c = from_hole.dot(from_hole)-1;
+    let c = from_hole.dot(from_hole)-2;
     let ts = solve_quadratic(a,b,c);
     // true only if we crossed through hole sphere
+    console.log("Solutions: "+ts[0]+", "+ts[1]);
     return (
         (ts[0] > -(10**-4) && (ts[0]-1) < 10**-4) ||
         (ts[1] > -(10**-4) && (ts[1]-1) < 10**-4)
@@ -249,7 +254,6 @@ function bounce(ball_prev_center, ball_prev_velocity, motion_type, point, normal
     let prebounce_velocity = intermediate_velocity(ball_prev_center, ball_prev_velocity, motion_type, point);
     // generate orthonormal basis around normal vector
     let basis_x = normal.normalized();
-    console.log("along normal: "+prebounce_velocity.dot(basis_x));
     // use flat vector to generate orthonormal basis, since no normal will ever be flat in our game
     let basis_y = basis_x.cross(vec3(1,0,0)).normalized();
     let basis_z = basis_x.cross(basis_y);
@@ -263,7 +267,6 @@ function bounce(ball_prev_center, ball_prev_velocity, motion_type, point, normal
     let prebounce_velocity_normal_basis = (change_of_basis.times(prebounce_velocity)).to3();
     // apply the bounce
     let postbounce_velocity_normal_basis = prebounce_velocity_normal_basis.times_pairwise(vec3(-bounce_factor,friction_factor,friction_factor));
-    console.log("postbounce velocity normal basis "+postbounce_velocity_normal_basis);
     // change back to regular coordinates
     let postbounce_velocity = Mat4.inverse(change_of_basis).times(postbounce_velocity_normal_basis).to3();
     return postbounce_velocity;
@@ -329,7 +332,6 @@ function predict_motion(ball_prev_center, ball_prev_velocity, hole_location, hil
         ball_ground_collision(free_half_tick)
     ){
         // if so, ball should roll across ground
-        console.log("rolling velocity: "+roll(ball_prev_velocity, vec3(0,1,0)));
         return {
             "type": "roll",
             "position": ball_prev_center.plus(
@@ -351,11 +353,8 @@ function predict_motion(ball_prev_center, ball_prev_velocity, hole_location, hil
 export function update_motion(ball_prev_center, ball_prev_velocity, hills, hole_location){
     let predicted_motion = predict_motion(ball_prev_center, ball_prev_velocity, hole_location, hills);
     let motion_type = predicted_motion["type"];
-    console.log(motion_type);
     let predicted_position = predicted_motion["position"];
-    console.log("predicted position: "+predicted_position);
     let predicted_velocity = predicted_motion["velocity"];
-    console.log("predicted_velocity: "+predicted_velocity);
     let collision_info = collision_detect(
         predicted_position, 
         motion_type,
