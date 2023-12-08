@@ -1,4 +1,5 @@
 import { defs, tiny } from "./examples/common.js";
+import * as physics from './physics.js';
 
 const {
   Vector,
@@ -24,7 +25,8 @@ export class Project extends Scene {
   constructor() {
     // constructor(): Scenes begin by populating initial values like the Shapes and Materials they'll need.
     super();
-
+    console.log(physics.ball_ellipsoid_collision(vec3(2,1,2), vec3(0,0,0), vec3(0,2,0)));
+    console.log(physics.ball_ellipsoid_intersection(vec3(2,1,2),vec3(0,0,0),vec(0,0,0),vec3(-2,4,0),vec3(Math.sqrt(2)/2,0,0)));
     // At the beginning of our program, load one of each of these shape definitions onto the GPU.
     this.shapes = {
       sphere: new defs.Subdivision_Sphere(4),
