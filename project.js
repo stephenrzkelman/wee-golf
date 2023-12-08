@@ -340,7 +340,7 @@ export class Project extends Scene {
     let angle = this.theta + this.theta_adjust
     power_arrow_transform = ball_transform  
     .times(Mat4.rotation(angle, 0, 1, 0)) //angle left and right about y axis
-    .times(Mat4.rotation(-this.phi, 1, 0, 0)) //angle above xz plane
+    .times(Mat4.rotation(-Math.PI/2 + this.phi, 1, 0, 0)) //angle above xz plane
     .times(Mat4.scale(0.25, 0.25, 5 * this.power))
     .times(Mat4.translation(0, 1, 1))
 
