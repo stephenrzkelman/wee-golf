@@ -17,6 +17,8 @@ const {
     Scene,
   } = tiny;
 
+const g = 1;
+
 function ball_ellipsoid_collision(
     ellipsoid_dimensions, 
     ellipsoid_center,
@@ -263,6 +265,8 @@ function bounce(ball_prev_center, ball_prev_velocity, motion_type, point, normal
 }
 
 function roll(ball_prev_velocity, normal){
+    // apply gravity
+    ball_prev_velocity = ball_prev_velocity.plus(vec3(0,-g,0));
     // generate orthonormal basis around normal vector
     let basis_x = normal.normalized();
     let basis_y = basis_x.cross(vec3(1,0,0)).normalized();
