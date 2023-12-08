@@ -28,8 +28,9 @@ export class Project extends Scene {
     // At the beginning of our program, load one of each of these shape definitions onto the GPU.
     this.shapes = {
       sphere: new defs.Subdivision_Sphere(4),
+      ball: new defs.Normal_Subdivision_Sphere(4),
       grass: new defs.Normal_Square(),
-      hill: new defs.Subdivision_Sphere(4),
+      hill: new defs.Normal_Subdivision_Sphere(4),
       square: new defs.Square(),
       hole: new defs.Torus(15, 15),
       flagpole: new defs.Capped_Cylinder(15, 15),
@@ -40,7 +41,7 @@ export class Project extends Scene {
 
     // *** Materials
     this.materials = {
-      grass: new Material(new defs.Normal_Textured_Phong(), {
+      grass: new Material(new defs.Real_Bump(), {
         ambient: 1,
         texture: new Texture("../assets/grass.jpeg"),
         normal_texture: new Texture("../assets/NormalMap.jpg"),
@@ -61,6 +62,12 @@ export class Project extends Scene {
         diffusivity: 0,
         specularity: 0,
         color: hex_color("#ffffff"),
+      }),
+      text_ball: new Material(new defs.Real_Bump(), {
+        ambient: 1,
+        texture: new Texture("../assets/golf.jpg"),
+        normal_texture: new Texture("../assets/golfnormal.jpeg"),
+        dist: 1,
       }),
       background: new Material(new defs.Textured_Phong(), {
         ambient: 1,
@@ -239,9 +246,6 @@ export class Project extends Scene {
       1000
     );
 
-    // Lighting
-    const light_position = vec4(0, 5, 5, 1); // The parameters of the Light are: position, color, size
-
     // Physics
 
     // get initial velocity and direction info (based on power +club + direction inputs)
@@ -375,14 +379,15 @@ export class Project extends Scene {
         program_state.camera_inverse = this.ball_cam
     }
 
+    // Lighting
+    const light_position = vec4(this.ball_position[0], this.ball_position[1]+5, this.ball_position[2], 1); // The parameters of the Light are: position, color, size
     program_state.lights = [
-      new Light(light_position, hex_color("#80FFFF"), 10 ** 1),
+      new Light(light_position, hex_color("#80FFFF"), 10 ** 2.5),
     ];
 
     let ground_width = 80;
     let ground_length = 200;
-    const texture_scale = 10;
-
+    const texture_scale = 5;
     // Scale the texture coordinates:
     for (let i = 0; i < this.shapes.grass.arrays.texture_coord.length; i++) {
       this.shapes.grass.arrays.texture_coord[i][0] *=
@@ -400,6 +405,15 @@ export class Project extends Scene {
         hill_length / texture_scale;
     }
 
+    let ball_width = 13;
+    let ball_length = 5;
+
+    for (let i = 0; i < this.shapes.hill.arrays.texture_coord.length; i++) {
+      this.shapes.ball.arrays.texture_coord[i][0] *= ball_width / texture_scale;
+      this.shapes.ball.arrays.texture_coord[i][1] *=
+        ball_length / texture_scale;
+    }
+
     // Draw ground
     this.shapes.grass.draw(
       context,
@@ -414,25 +428,25 @@ export class Project extends Scene {
       this.materials.background
     );
 
-    this.shapes.sphere.draw(
+    this.shapes.ball.draw(
       context,
       program_state,
       ball_transform,
-      this.materials.ball
+      this.materials.text_ball
     );
 
     this.shapes.hill.draw(
       context,
       program_state,
       hill_1_transform,
-      this.materials.hill
+      this.materials.grass
     );
 
     this.shapes.hill.draw(
       context,
       program_state,
       hill_2_transform,
-      this.materials.hill
+      this.materials.grass
     );
 
     this.shapes.hole.draw(

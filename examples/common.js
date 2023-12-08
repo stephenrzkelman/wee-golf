@@ -68,53 +68,26 @@ const Normal_Square = defs.Normal_Square =
             const normals = Vector3.cast([0, 0, 1], [0, 0, 1], [0, 0, 1], [0, 0, 1]);
             const texture_coords = Vector3.cast([0, 0], [1, 0], [0, 1], [1, 1]);
             const indices = [0, 1, 2, 3, 1, 2];
-            const tangents = Vector3.cast([0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]);
 
             // Calculate tangents
-            for (let i = 0; i < indices.length - 2; i+=3) {
-                const i0 = indices[i];
-                const i1 = indices[i + 1];
-                const i2 = indices[i + 2];
+            const edge1 = positions[0].minus(positions[2]);
+            const edge2 = positions[1].minus(positions[2]);
+            const deltaUV1 = texture_coords[0].minus(texture_coords[2]);
+            const deltaUV2 = texture_coords[1].minus(texture_coords[2]);
+            const f = 1 / (deltaUV1[0] * deltaUV2[1] - deltaUV2[0] * deltaUV1[1]);
+            const tangent1 = [0, 0, 0];
+            tangent1[0] = f * (deltaUV2[1] * edge1[0] - deltaUV1[1] * edge2[0]);
+            tangent1[1] = f * (deltaUV2[1] * edge1[1] - deltaUV1[1] * edge2[1]);
+            tangent1[2] = f * (deltaUV2[1] * edge1[2] - deltaUV1[1] * edge2[2]);
 
-                if (i0 === i1 || i1 === i2 || i0 === i2) continue;
-
-                const edge1 = positions[indices[i1]]?.minus(positions[i0]);
-                const edge2 = positions[indices[i2]]?.minus(positions[i0]);
-
-                if (edge1 && edge2) {
-                    const deltaU1 = texture_coords[i1][0] - texture_coords[i0][0];
-                    const deltaV1 = texture_coords[i1][1] - texture_coords[i0][1];
-                    const deltaU2 = texture_coords[i2][0] - texture_coords[i0][0];
-                    const deltaV2 = texture_coords[i2][1] - texture_coords[i0][1];
-                    
-                    const denom = (deltaU1 * deltaV2 - deltaU2 * deltaV1);
-
-                    if (denom !== 0) {
-                        const f = 1 / denom;
-                        const tangent = [0, 0, 0];
-                        tangent[0] = f * (deltaV2 * edge1[0] - deltaV1 * edge2[0]);
-                        tangent[1] = f * (deltaV2 * edge1[1] - deltaV1 * edge2[1]);
-                        tangent[2] = f * (deltaV2 * edge1[2] - deltaV1 * edge2[2]);
-                        
-                        tangents[i0] = tangents[i0].plus(vec3(...tangent));
-                        tangents[i1] = tangents[i1].plus(vec3(...tangent));
-                        tangents[i2] = tangents[i2].plus(vec3(...tangent));
-                    }
-                }
-            }
-            
-            // Normalize each tangent
-            for (let i = 0; i < tangents.length; i++) {
-                tangents[i].normalize();
-            }
-            
             // Specify the 4 square corner locations, and match those up with normal vectors:
             this.arrays.position = positions;
             this.arrays.normal = normals;
             // Arrange the vertices into a square shape in texture space too:
             this.arrays.texture_coord = texture_coords;
-            this.arrays.tangents = tangents;
-            this.indices.push(...indices);
+            // Use two triangles this time, indexing into four distinct vertices:
+            this.arrays.tangents = Vector3.cast(tangent1, tangent1, tangent1, tangent1);
+            this.indices.push(0, 1, 2, 1, 3, 2);
         }
     }
 
@@ -295,6 +268,103 @@ const Subdivision_Sphere = defs.Subdivision_Sphere =
             this.subdivide_triangle(ac, bc, c, count - 1);
             this.subdivide_triangle(ab, bc, ac, count - 1);
         }
+    }
+
+const Normal_Subdivision_Sphere = defs.Normal_Subdivision_Sphere =
+    class Normal_Subdivision_Sphere extends Shape {
+        // **Subdivision_Sphere** defines a Sphere surface, with nice uniform triangles.  A subdivision surface
+        // (see Wikipedia article on those) is initially simple, then builds itself into a more and more
+        // detailed shape of the same layout.  Each act of subdivision makes it a better approximation of
+        // some desired mathematical surface by projecting each new point onto that surface's known
+        // implicit equation.  For a sphere, we begin with a closed 3-simplex (a tetrahedron).  For each
+        // face, connect the midpoints of each edge together to make more faces.  Repeat recursively until
+        // the desired level of detail is obtained.  Project all new vertices to unit vectors (onto the
+        // unit sphere) and group them into triangles by following the predictable pattern of the recursion.
+        constructor(max_subdivisions) {
+            super("position", "normal", "texture_coord", "tangents");
+            // Start from the following equilateral tetrahedron:
+            const tetrahedron = [[0, 0, -1], [0, .9428, .3333], [-.8165, -.4714, .3333], [.8165, -.4714, .3333]];
+            this.arrays.position = Vector3.cast(...tetrahedron);
+            // Begin recursion:
+            this.subdivide_triangle(0, 1, 2, max_subdivisions);
+            this.subdivide_triangle(3, 2, 1, max_subdivisions);
+            this.subdivide_triangle(1, 0, 3, max_subdivisions);
+            this.subdivide_triangle(0, 2, 3, max_subdivisions);
+
+            // With positions calculated, fill in normals and texture_coords of the finished Sphere:
+            for (let p of this.arrays.position) {
+                // Each point has a normal vector that simply goes to the point from the origin:
+                this.arrays.normal.push(p.copy());
+
+                // Calculate the tangent vector for each point
+                let tangent = this.calculateTangent(p);
+                this.arrays.tangents.push(tangent);
+                // Textures are tricky.  A Subdivision sphere has no straight seams to which image
+                // edges in UV space can be mapped.  The only way to avoid artifacts is to smoothly
+                // wrap & unwrap the image in reverse - displaying the texture twice on the sphere.
+                //  this.arrays.texture_coord.push( Vector.of( Math.asin( p[0]/Math.PI ) + .5, Math.asin( p[1]/Math.PI ) + .5 ) );
+                this.arrays.texture_coord.push(Vector.of(
+                    0.5 - Math.atan2(p[2], p[0]) / (2 * Math.PI),
+                    0.5 + Math.asin(p[1]) / Math.PI));
+            }
+
+            // Fix the UV seam by duplicating vertices with offset UV:
+            const tex = this.arrays.texture_coord;
+            for (let i = 0; i < this.indices.length; i += 3) {
+                const a = this.indices[i], b = this.indices[i + 1], c = this.indices[i + 2];
+                if ([[a, b], [a, c], [b, c]].some(x => (Math.abs(tex[x[0]][0] - tex[x[1]][0]) > 0.5))
+                    && [a, b, c].some(x => tex[x][0] < 0.5)) {
+                    for (let q of [[a, i], [b, i + 1], [c, i + 2]]) {
+                        if (tex[q[0]][0] < 0.5) {
+                            this.indices[q[1]] = this.arrays.position.length;
+                            this.arrays.position.push(this.arrays.position[q[0]].copy());
+                            this.arrays.normal.push(this.arrays.normal  [q[0]].copy());
+                            tex.push(tex[q[0]].plus(vec(1, 0)));
+                        }
+                    }
+                }
+            }
+        }
+        calculateTangent(vertex) {
+            // Implement your tangent calculation logic here
+            // You may use the vertex position to derive a tangent vector
+            // based on the sphere's surface characteristics.
+            // The tangent should be orthogonal to the normal vector.
+            // Example:
+            return vec3(0, 1, 0).cross(vertex).normalized();
+        }
+        subdivide_triangle(a, b, c, count) {
+            // subdivide_triangle(): Recurse through each level of detail
+            // by splitting triangle (a,b,c) into four smaller ones.
+            if (count <= 0) {
+                // Base case of recursion - we've hit the finest level of detail we want.
+                this.indices.push(a, b, c);
+                return;
+            }
+            // So we're not at the base case.  So, build 3 new vertices at midpoints,
+            // and extrude them out to touch the unit sphere (length 1).
+            let ab_vert = this.arrays.position[a].mix(this.arrays.position[b], 0.5).normalized(),
+                ac_vert = this.arrays.position[a].mix(this.arrays.position[c], 0.5).normalized(),
+                bc_vert = this.arrays.position[b].mix(this.arrays.position[c], 0.5).normalized();
+            // Here, push() returns the indices of the three new vertices (plus one).
+            let ab = this.arrays.position.push(ab_vert) - 1,
+                ac = this.arrays.position.push(ac_vert) - 1,
+                bc = this.arrays.position.push(bc_vert) - 1;
+            // Recurse on four smaller triangles, and we're done.  Skipping every fourth vertex index in
+            // our list takes you down one level of detail, and so on, due to the way we're building it.
+
+            let ab_tangent = this.calculateTangent(ab_vert);
+            let ac_tangent = this.calculateTangent(ac_vert);
+            let bc_tangent = this.calculateTangent(bc_vert);
+        
+            this.arrays.tangents.push(ab_tangent, ac_tangent, bc_tangent);
+
+            this.subdivide_triangle(a, ab, ac, count - 1);
+            this.subdivide_triangle(ab, b, bc, count - 1);
+            this.subdivide_triangle(ac, bc, c, count - 1);
+            this.subdivide_triangle(ab, bc, ac, count - 1);
+        }
+        
     }
 
 
@@ -840,11 +910,8 @@ const Textured_Phong = defs.Textured_Phong =
     }
 
 
-const Normal_Textured_Phong = defs.Normal_Textured_Phong =
-    class Normal_Textured_Phong extends Phong_Shader {
-        // **Textured_Phong** is a Phong Shader extended to addditionally decal a
-        // texture image over the drawn shape, lined up according to the texture
-        // coordinates that are stored at each shape vertex.
+const Real_Bump = defs.Real_Bump =
+    class Real_Bump extends Textured_Phong {
         vertex_glsl_code() {
             // ********* VERTEX SHADER *********
             return this.shared_glsl_code() + `
