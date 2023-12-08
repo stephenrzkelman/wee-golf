@@ -118,6 +118,14 @@ export class Project extends Scene {
       ambient: 1,
       texture: new Texture("../assets/four.png")
   }),
+    end_screen5: new Material(new defs.Textured_Phong(), {
+      ambient: 1,
+      texture: new Texture("../assets/five.png")
+  }),
+  end_screen6: new Material(new defs.Textured_Phong(), {
+    ambient: 1,
+    texture: new Texture("../assets/suck.png")
+}),
       par: new Material(new defs.Textured_Phong(), {
           ambient: 1,
           texture: new Texture("../assets/par.png")
@@ -543,6 +551,22 @@ export class Project extends Scene {
           this.materials.end_screen4
         )
       }
+      else if (this.stroke_count == 5) {
+        this.shapes.end_rectangle.draw(
+          context,
+          program_state,
+          end_transform,
+          this.materials.end_screen5
+        )
+      }
+      else {
+        this.shapes.end_rectangle.draw(
+          context,
+          program_state,
+          end_transform,
+          this.materials.end_screen6
+        )
+      }
 
     } else {
       // draw assets to shoot
@@ -555,12 +579,14 @@ export class Project extends Scene {
           )
         }
     }
-    this.shapes.end_rectangle.draw(
-      context,
-      program_state,
-      par_transform,
-      this.materials.par
-    )
+    if (this.stroke_count == 0) {
+      this.shapes.end_rectangle.draw(
+        context,
+        program_state,
+        par_transform,
+        this.materials.par
+      )
+    }
   }
 }
 
