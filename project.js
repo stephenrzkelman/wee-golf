@@ -25,8 +25,6 @@ export class Project extends Scene {
   constructor() {
     // constructor(): Scenes begin by populating initial values like the Shapes and Materials they'll need.
     super();
-    console.log(physics.ball_ellipsoid_collision(vec3(2,1,2), vec3(0,0,0), vec3(0,2,0)));
-    console.log(physics.ball_ellipsoid_intersection(vec3(2,1,2),vec3(0,0,0),vec(0,0,0),vec3(-2,4,0),vec3(Math.sqrt(2)/2,0,0)));
     // At the beginning of our program, load one of each of these shape definitions onto the GPU.
     this.shapes = {
       sphere: new defs.Subdivision_Sphere(4),
@@ -112,11 +110,21 @@ export class Project extends Scene {
     this.theta = 0; // angle from z axis, based on direction input
     this.theta_adjust = 0
     this.phi = Math.PI / 6; // angle from y axis
-    this.hole_location = [0, 0, 30]
+    this.hole_location = vec3(0,0,30);
+    this.hills = [
+      {
+        "center":vec3(15,-2,13),
+        "dimensions":vec3(12,5,8),
+      },
+      {
+        "center":vec3(-10,-1,17),
+        "dimensions":vec3(9,4,6),
+      }
+    ]
 
     // set initial camera
     let eye = this.get_camera_location()
-    let poi = this.hole_location
+    let poi = this.hole_location.plus(vec3(0,0,0.5));
     let up = vec3(0, 1, 0)
     this.initial_camera_location = Mat4.look_at(vec3(eye[0], eye[1], eye[2]), vec3(poi[0], poi[1], poi[2]), up)
   }
@@ -127,6 +135,9 @@ export class Project extends Scene {
     this.key_triggered_button("Power Up", ["q"], () => {
         this.power += 0.075;
     })
+    this.key_triggered_button("step", ["c"], () => {
+      this.step=true;
+  })
     this.key_triggered_button("Power Down", ["e"], () => {
         this.power -= 0.075;
     })
@@ -212,7 +223,7 @@ export class Project extends Scene {
     let t = -1
     let xt = (this.hole_location[0] - x) * (t * 0.5) + x 
     let yt = (this.hole_location[1] - y) * t + y + 5
-    let zt = (this.hole_location[2] - z) * (t * 0.5) + z 
+    let zt = (this.hole_location[2] + 0.5 - z) * (t * 0.5) + z 
     return [xt, yt, zt]
   }
 
@@ -243,7 +254,9 @@ export class Project extends Scene {
     let theta = this.theta + this.theta_adjust; // angle from z axis, based on direction input
 
     // if the position & movement aren't set, initialize them
-    if (typeof this.ball_position === "undefined" || this.been_hit === false) {
+    if (typeof this.ball_position === "undefined" || 
+    typeof this.ball_velocity === "undefined" ||
+    this.been_hit === false) {
     //   this.ball_position = vec3(0, 1, 0); // set initial ball position to 0
       let x_initial_velocity = velocity * Math.sin(phi) * Math.sin(theta);
       let y_initial_velocity = velocity * Math.cos(phi);
@@ -256,42 +269,20 @@ export class Project extends Scene {
     }
     // otherwise, update them
     else {
-      // check for collision
-      let projected_y = this.ball_position[1] + this.ball_velocity[1] - 0.5;
-      if (projected_y <= 1) {
-        // determine time to collision
-        let time_to_collision =
-          this.ball_velocity[1] +
-          Math.sqrt(
-            this.ball_velocity[1] ** 2 + 2 * (this.ball_position[1] - 1)
-          );
-        // determine coordinates at time of collision
-        this.ball_position[0] += this.ball_velocity[0] * time_to_collision;
-        this.ball_position[2] += this.ball_velocity[2] * time_to_collision;
-        this.ball_position[1] +=
-          this.ball_velocity[1] * time_to_collision -
-          time_to_collision ** 2 / 2;
-        // determine y velocity at time of collision
-        let collision_vy = this.ball_velocity[1] - time_to_collision;
-        // update velocity after collision
-        this.ball_velocity[0] *= 0.9;
-        this.ball_velocity[2] *= 0.9;
-        this.ball_velocity[1] = -0.25 * collision_vy;
-      }
-      // if no collision, just update with gravity
-      else {
-        // update positions
-        this.ball_position[0] += this.ball_velocity[0];
-        this.ball_position[2] += this.ball_velocity[2];
-        this.ball_position[1] += this.ball_velocity[1] - 0.5;
-        // update y velocity
-        this.ball_velocity[1] -= 1;
+      if(this.step){
+        let new_pv = physics.update_motion(this.ball_position, this.ball_velocity, this.hills, this.hole_location);
+        this.ball_position = new_pv["position"];
+        this.ball_velocity = new_pv["velocity"];
+        console.log("position: "+this.ball_position);
+        console.log("velocity: "+this.ball_velocity);
+        this.step = false;
       }
     }
 
     // update the ball's location
     // console.log(this.ball_position)
-    let ball_location = Mat4.identity().times(
+    let ball_location = Mat4.identity()
+    .times(
       Mat4.translation(
         this.ball_position[0],
         this.ball_position[1],
@@ -314,7 +305,7 @@ export class Project extends Scene {
     );
     let hill_1_transform = model_transform
       .times(Mat4.translation(15, -2, 13))
-      .times(Mat4.rotation((Math.PI * 3) / 4, 0, 1, 0))
+      // .times(Mat4.rotation((Math.PI * 3) / 4, 0, 1, 0)) // removing this for now, since collision detection doesn't deal with rotated ellipsoids yet
       .times(Mat4.scale(12, 5, 8));
     let hill_2_transform = model_transform
       .times(Mat4.translation(-10, -1, 17))
@@ -358,7 +349,7 @@ export class Project extends Scene {
         }
         
         // start following ball 0.5 seconds after hit
-        if (t - this.time_hit > 0.3){
+        if (t - this.time_hit > 0){
             let eye;
             if (this.ball_position[2] < this.hole_location[2]){
                 eye = vec3(this.ball_position[0],this.ball_position[1]+5,this.ball_position[2] - 20);
@@ -382,7 +373,7 @@ export class Project extends Scene {
     else{
         // alert('here')
         let eye = this.get_camera_location()
-        let poi = this.hole_location
+        let poi = this.hole_location.plus(vec3(0,0,0.5));
         let top = vec3(0, 1, 0);
         this.ball_cam = Mat4.look_at(vec3(eye[0], eye[1], eye[2]), vec3(poi[0], poi[1], poi[2]), top)
         program_state.camera_inverse = this.ball_cam
