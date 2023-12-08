@@ -157,6 +157,28 @@ function ball_ground_intersection(
     return collision_point;
 }
 
+function ball_hole_collision(ball_prev_center, ball_prev_velocity, motion_type, hole_location){
+    // no chip-ins/bounce-ins
+    if(motion_type === "free")
+        return false;
+    let speed = ball_prev_velocity.norm();
+    // going too fast ==> misses the hole
+    if(speed > 5)
+        return false;
+    // otherwise, just check if we cross the hole
+    let ball_hole_location = hole_location.plus(vec3(0,1,0));
+    let from_hole = ball_prev_center.minus(ball_hole_location);
+    let a = ball_prev_velocity.dot(ball_prev_velocity);
+    let b = 2*from_hole.dot(ball_prev_velocity);
+    let c = from_hole.dot(from_hole)-1;
+    let ts = solve_quadratic(a,b,c);
+    // true only if we crossed through hole sphere
+    return (
+        (ts[0] > -(10**-4) && (ts[0]-1) < 10**-4) ||
+        (ts[1] > -(10**-4) && (ts[1]-1) < 10**-4)
+    );
+}
+
 // return point of collision and normal vector at point
 function collision_detect(
     ball_center, motion_type, ball_prev_center, ball_prev_velocity,
@@ -164,6 +186,9 @@ function collision_detect(
 ){
     // check in following order
     // check if ball collides with the hole
+    if(ball_hole_collision(ball_prev_center, ball_prev_velocity, motion_type, hole_location)){
+        return "hole";
+    }
     // check if ball collides with any of the hills, using ellipsoid_collision
     for(let hill of hills){
         let ellipsoid_center = hill["center"];
@@ -260,7 +285,14 @@ function predict_motion(ball_prev_center, ball_prev_velocity, hole_location, hil
     let free_full_tick = ball_prev_center.plus(ball_prev_velocity).plus(vec3(0,-0.5,0));
     let free_half_tick = ball_prev_center.plus(ball_prev_velocity.times(0.5)).plus(vec3(0,-0.125,0));
     // check if ball already is in hole
-    // if so, no motion
+    if(ball_prev_center.equals(hole_location.plus(vec3(0,1,0)))){
+        // if so, no motion
+        return{
+            "type": "hole",
+            "position": hole_location,
+            "velocity": vec3(0,0,0)
+        };
+    }
     // check hills
     for(let hill of hills){
         let ellipsoid_center = hill["center"];
@@ -278,7 +310,7 @@ function predict_motion(ball_prev_center, ball_prev_velocity, hole_location, hil
                     roll(ball_prev_velocity, ellipsoid_normal(ellipsoid_dimensions, ellipsoid_center, ball_prev_center))
                 ),
                 "velocity": roll(ball_prev_velocity, ellipsoid_normal(ellipsoid_dimensions, ellipsoid_center, ball_prev_center))
-            }
+            };
         }
     }
     // check if ball already is on ground
@@ -322,6 +354,7 @@ export function update_motion(ball_prev_center, ball_prev_velocity, hills, hole_
         predicted_velocity,
         vec3(0,0,30),
         hills);
+    // no collision
     if(collision_info === null){
         let accel = (motion_type === "free") ? vec3(0,-1,0) : vec3(0,0,0);
         return{
@@ -329,6 +362,14 @@ export function update_motion(ball_prev_center, ball_prev_velocity, hills, hole_
             "velocity": predicted_velocity.plus(accel)
         }
     }
+    // collision with hole
+    else if(collision_info === "hole"){
+        return{
+            "position": hole_location,
+            "velocity": vec3(0,0,0)
+        }
+    }
+    // collision with other object
     else{
         let collision_point = collision_info["point"];
         let collision_normal = collision_info["normal"];

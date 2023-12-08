@@ -117,7 +117,7 @@ export class Project extends Scene {
 
     // set initial camera
     let eye = this.get_camera_location()
-    let poi = this.hole_location
+    let poi = this.hole_location.plus(vec3(0,0,0.5));
     let up = vec3(0, 1, 0)
     this.initial_camera_location = Mat4.look_at(vec3(eye[0], eye[1], eye[2]), vec3(poi[0], poi[1], poi[2]), up)
   }
@@ -216,7 +216,7 @@ export class Project extends Scene {
     let t = -1
     let xt = (this.hole_location[0] - x) * (t * 0.5) + x 
     let yt = (this.hole_location[1] - y) * t + y + 5
-    let zt = (this.hole_location[2] - z) * (t * 0.5) + z 
+    let zt = (this.hole_location[2] + 0.5 - z) * (t * 0.5) + z 
     return [xt, yt, zt]
   }
 
@@ -273,37 +273,6 @@ export class Project extends Scene {
         console.log("velocity: "+this.ball_velocity);
         this.step = false;
       }
-      // // check for collision
-      // let projected_y = this.ball_position[1] + this.ball_velocity[1] - 0.5;
-      // if (projected_y <= 1) {
-      //   // determine time to collision
-      //   let time_to_collision =
-      //     this.ball_velocity[1] +
-      //     Math.sqrt(
-      //       this.ball_velocity[1] ** 2 + 2 * (this.ball_position[1] - 1)
-      //     );
-      //   // determine coordinates at time of collision
-      //   this.ball_position[0] += this.ball_velocity[0] * time_to_collision;
-      //   this.ball_position[2] += this.ball_velocity[2] * time_to_collision;
-      //   this.ball_position[1] +=
-      //     this.ball_velocity[1] * time_to_collision -
-      //     time_to_collision ** 2 / 2;
-      //   // determine y velocity at time of collision
-      //   let collision_vy = this.ball_velocity[1] - time_to_collision;
-      //   // update velocity after collision
-      //   this.ball_velocity[0] *= 0.9;
-      //   this.ball_velocity[2] *= 0.9;
-      //   this.ball_velocity[1] = -0.25 * collision_vy;
-      // }
-      // // if no collision, just update with gravity
-      // else {
-      //   // update positions
-      //   this.ball_position[0] += this.ball_velocity[0];
-      //   this.ball_position[2] += this.ball_velocity[2];
-      //   this.ball_position[1] += this.ball_velocity[1] - 0.5;
-      //   // update y velocity
-      //   this.ball_velocity[1] -= 1;
-      // }
     }
 
     // update the ball's location
@@ -400,7 +369,7 @@ export class Project extends Scene {
     else{
         // alert('here')
         let eye = this.get_camera_location()
-        let poi = this.hole_location
+        let poi = this.hole_location.plus(vec3(0,0,0.5));
         let top = vec3(0, 1, 0);
         this.ball_cam = Mat4.look_at(vec3(eye[0], eye[1], eye[2]), vec3(poi[0], poi[1], poi[2]), top)
         program_state.camera_inverse = this.ball_cam
