@@ -32,11 +32,16 @@ function ball_ellipsoid_collision(
     return (norm-1) < (10 ** -4);
 }
 
-function ellipsoid_normal(
+export function ellipsoid_normal(
     ellipsoid_dimensions,
+    ellipsoid_center,
     point
 ){
-    // assuming ellipsoid is centered at origin
+    // re-center ellipsoid to origin
+    let center_ellipsoid = Mat4.identity()
+    .times(Mat4.translation(-ellipsoid_center[0], -ellipsoid_center[1], -ellipsoid_center[2]));
+    // move ball_center
+    point = (center_ellipsoid.times(point.to4(true))).to3();
     let normal = vec3(0,0,0);
     for(let i = 0; i< 3; i++){
         normal[i] = point[i] * ellipsoid_dimensions[(i+1)%3]*ellipsoid_dimensions[(i+2)%3]/ellipsoid_dimensions[i%3];
@@ -85,7 +90,7 @@ function ball_ellipsoid_intersection(
             let linear_intersection_1 = start_point.mix(ball_center, intersection_ts[1]);
             linear_intersection = (linear_intersection_0[1] < 10 ** -4) ? linear_intersection_1 : linear_intersection_0;
             // 2: find the tangent plane at this point
-            let normal = ellipsoid_normal(bigger_dimensions, linear_intersection);
+            let normal = ellipsoid_normal(bigger_dimensions, vec3(0, 0, 0) ,linear_intersection);
             // 3: find intersection of quadratic with tangent plane
             a = normal.dot(vec3(0,-0.5,0));
             b = normal.dot(ball_prev_velocity);
@@ -173,7 +178,7 @@ function collision_detect(
                 motion_type
             ).to3();
             let touch_point = intersection_point.plus((ellipsoid_center.minus(intersection_point)).normalized());
-            let normal = ellipsoid_normal(ellipsoid_dimensions, touch_point);
+            let normal = ellipsoid_normal(ellipsoid_dimensions, ellipsoid_center, touch_point);
             return {
                 "point": intersection_point,
                 "normal": normal
@@ -192,23 +197,27 @@ function collision_detect(
     }
 }
 
-function intermediate_velocity(ball_prev_center, ball_prev_velocity, point){
-    let time_to_collision = 0;
-    if(Math.abs(ball_prev_velocity[0]) > 10 ** -4){
-        time_to_collision = (point[0] - ball_prev_center[0])/ball_prev_velocity[0];
+function intermediate_velocity(ball_prev_center, ball_prev_velocity, motion_type, point){
+    let y_velocity_change = 0;
+    if(motion_type === "free"){
+        let time_to_collision = 0;
+        if(Math.abs(ball_prev_velocity[0]) > 10 ** -4){
+            time_to_collision = (point[0] - ball_prev_center[0])/ball_prev_velocity[0];
+        }
+        else if(Math.abs(ball_prev_velocity[2]) > 10 ** -4){
+            time_to_collision = (point[2] - ball_prev_center[2])/ball_prev_velocity[2];
+        }
+        y_velocity_change = 0.5*(time_to_collision**2);
     }
-    else if(Math.abs(ball_prev_velocity[2]) > 10 ** -4){
-        time_to_collision = (point[2] - ball_prev_center[2])/ball_prev_velocity[2];
-    }
-    let y_velocity_change = 0.5*(time_to_collision**2);
     return ball_prev_velocity.minus(vec3(0,y_velocity_change,0));
 }
 
-function bounce(ball_prev_center, ball_prev_velocity, point, normal){
+function bounce(ball_prev_center, ball_prev_velocity, motion_type, point, normal){
     // compute velocity at bounce point
-    let prebounce_velocity = intermediate_velocity(ball_prev_center, ball_prev_velocity, point);
+    let prebounce_velocity = intermediate_velocity(ball_prev_center, ball_prev_velocity, motion_type, point);
     // generate orthonormal basis around normal vector
     let basis_x = normal.normalized();
+    console.log("along normal: "+prebounce_velocity.dot(basis_x));
     // use flat vector to generate orthonormal basis, since no normal will ever be flat in our game
     let basis_y = basis_x.cross(vec3(1,0,0)).normalized();
     let basis_z = basis_x.cross(basis_y);
@@ -222,6 +231,7 @@ function bounce(ball_prev_center, ball_prev_velocity, point, normal){
     let prebounce_velocity_normal_basis = (change_of_basis.times(prebounce_velocity)).to3();
     // apply the bounce
     let postbounce_velocity_normal_basis = prebounce_velocity_normal_basis.times_pairwise(vec3(-0.25,0.9,0.9));
+    console.log("postbounce velocity normal basis "+postbounce_velocity_normal_basis);
     // change back to regular coordinates
     let postbounce_velocity = Mat4.inverse(change_of_basis).times(postbounce_velocity_normal_basis).to3();
     return postbounce_velocity;
@@ -265,9 +275,9 @@ function predict_motion(ball_prev_center, ball_prev_velocity, hole_location, hil
             return {
                 "type": "roll",
                 "position": ball_prev_center.plus(
-                    roll(ball_prev_velocity, ellipsoid_normal(ellipsoid_dimensions, ball_prev_center))
+                    roll(ball_prev_velocity, ellipsoid_normal(ellipsoid_dimensions, ellipsoid_center, ball_prev_center))
                 ),
-                "velocity": roll(ball_prev_velocity, ellipsoid_normal(ellipsoid_dimensions, ball_prev_center))
+                "velocity": roll(ball_prev_velocity, ellipsoid_normal(ellipsoid_dimensions, ellipsoid_center, ball_prev_center))
             }
         }
     }
@@ -322,9 +332,10 @@ export function update_motion(ball_prev_center, ball_prev_velocity, hills, hole_
     else{
         let collision_point = collision_info["point"];
         let collision_normal = collision_info["normal"];
+        console.log("bounce normal: "+collision_normal);
         return{
-            "position": collision_info["point"],
-            "velocity": bounce(ball_prev_center, predicted_velocity, collision_point, collision_normal)
+            "position": collision_point,
+            "velocity": bounce(ball_prev_center, predicted_velocity, motion_type, collision_point, collision_normal)
         }
     }
 }
