@@ -17,10 +17,10 @@ const {
     Scene,
   } = tiny;
 
-const g = 0.25;
+const g = 0.1;
 const bounce_factor = 0.5;
-const friction_factor = 0.6;
-export const max_velocity = 5;
+const friction_factor = 0.9;
+export const max_velocity = 3;
 
 function ball_ellipsoid_collision(
     ellipsoid_dimensions, 
