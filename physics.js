@@ -17,10 +17,10 @@ const {
     Scene,
   } = tiny;
 
-const g = 0.1/3;
+const g = 0.01;
 const bounce_factor = 0.5;
-const friction_factor = 0.9;
-export const max_velocity = 1;
+const friction_factor = 0.99;
+export const max_velocity = 0.2;
 
 function ball_ellipsoid_collision(
     ellipsoid_dimensions, 
@@ -34,7 +34,7 @@ function ball_ellipsoid_collision(
     ball_center = normalize_ellipsoid.times(ball_center.to4(true)).to3();
     // check if the result has magnitude < 1
     let norm = ball_center.norm();
-    return (norm-1) < (10 ** -4);
+    return (norm-1) < Number.EPSILON;
 }
 
 function ellipsoid_normal(
@@ -56,7 +56,11 @@ function ellipsoid_normal(
 
 function solve_quadratic(a,b,c){
     let discriminant = (b**2-4*a*c);
-    // might be slightly less than 0 due to floating point errors
+    // if no real solutions, return null
+    if(discriminant < -Number.EPSILON){
+        return null;
+    }
+    // otherwise, might be slightly less than 0 due to floating point errors
     discriminant = Math.max(discriminant, 0);
     let solution_1 = (-b-Math.sqrt(discriminant))/(2*a);
     let solution_2 = (-b+Math.sqrt(discriminant))/(2*a);
@@ -93,7 +97,7 @@ function ball_ellipsoid_intersection(
             let intersection_ts = solve_quadratic(a,b,c);
             let linear_intersection_0 = start_point.mix(ball_center, intersection_ts[0]);
             let linear_intersection_1 = start_point.mix(ball_center, intersection_ts[1]);
-            linear_intersection = (linear_intersection_0[1] < 10 ** -4) ? linear_intersection_1 : linear_intersection_0;
+            linear_intersection = (linear_intersection_0[1] < Number.EPSILON) ? linear_intersection_1 : linear_intersection_0;
             // 2: find the tangent plane at this point
             let normal = ellipsoid_normal(bigger_dimensions, vec3(0, 0, 0) ,linear_intersection);
             // 3: find intersection of quadratic with tangent plane
@@ -122,7 +126,7 @@ function ball_ellipsoid_intersection(
         let intersection_ts = solve_quadratic(a,b,c);
         let linear_intersection_0 = start_point.mix(ball_center, intersection_ts[0]);
         let linear_intersection_1 = start_point.mix(ball_center, intersection_ts[1]);
-        linear_intersection = (linear_intersection_0[1] < 10 ** -4) ? linear_intersection_1 : linear_intersection_0;
+        linear_intersection = (linear_intersection_0[1] < Number.EPSILON) ? linear_intersection_1 : linear_intersection_0;
     }
     let intersection_point = linear_intersection.to4(true);
     let true_intersection = Mat4.inverse(center_ellipsoid).times(intersection_point);
@@ -149,7 +153,7 @@ function ball_ground_intersection(
     }
     // linear motion
     else{
-        if(Math.abs(ball_prev_velocity[1]) < 10** -4){
+        if(Math.abs(ball_prev_velocity[1]) < Number.EPSILON){
             time_to_collision = 1;
         }
         else{
@@ -183,11 +187,15 @@ function ball_hole_collision(ball_prev_center, ball_prev_velocity, motion_type, 
     let b = 2*from_hole.dot(ball_prev_velocity);
     let c = from_hole.dot(from_hole)-1;
     let ts = solve_quadratic(a,b,c);
-    // true only if we crossed through hole sphere
+    // if no solution, we didn't go through the hole
+    if(ts === null){
+        return false;
+    }
+    // otherwise, check that we passed through it for t in [0,1]
     console.log("Solutions: "+ts[0]+", "+ts[1]);
     return (
-        (ts[0] > -(10**-4) && (ts[0]-1) < 10**-4) ||
-        (ts[1] > -(10**-4) && (ts[1]-1) < 10**-4)
+        (ts[0] > -Number.EPSILON && (ts[0]-1) < Number.EPSILON) ||
+        (ts[1] > -Number.EPSILON && (ts[1]-1) < Number.EPSILON)
     );
 }
 
@@ -238,10 +246,10 @@ function intermediate_velocity(ball_prev_center, ball_prev_velocity, motion_type
     let y_velocity_change = 0;
     if(motion_type === "free"){
         let time_to_collision = 0;
-        if(Math.abs(ball_prev_velocity[0]) > 10 ** -4){
+        if(Math.abs(ball_prev_velocity[0]) > Number.EPSILON){
             time_to_collision = (point[0] - ball_prev_center[0])/ball_prev_velocity[0];
         }
-        else if(Math.abs(ball_prev_velocity[2]) > 10 ** -4){
+        else if(Math.abs(ball_prev_velocity[2]) > Number.EPSILON){
             time_to_collision = (point[2] - ball_prev_center[2])/ball_prev_velocity[2];
         }
         y_velocity_change = g/2*(time_to_collision**2);
@@ -274,7 +282,9 @@ function bounce(ball_prev_center, ball_prev_velocity, motion_type, point, normal
 
 function roll(ball_prev_velocity, normal){
     // apply gravity
-    ball_prev_velocity = ball_prev_velocity.plus(vec3(0,-g,0));
+    // if(ball_prev_velocity.norm() > 10**-2){
+        ball_prev_velocity = ball_prev_velocity.plus(vec3(0,-g,0));
+    // }
     // generate orthonormal basis around normal vector
     let basis_x = normal.normalized();
     let basis_y = basis_x.cross(vec3(1,0,0)).normalized();
