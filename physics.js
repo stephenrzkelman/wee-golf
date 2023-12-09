@@ -17,10 +17,16 @@ const {
     Scene,
   } = tiny;
 
+// acceleration due to gravity
 const g = 0.01;
+// factor by which velocity decreases due to bouncing
 const bounce_factor = 0.5;
+// factor by which velocity decreases due to friction
 const friction_factor = 0.99;
-export const max_velocity = 0.2;
+// initial velocity when input power is 1
+export const max_velocity = 0.5;
+// cuttoff normal-direction speed for bouncing vs rolling
+const roll_threshold = 10**-4;
 
 function ball_ellipsoid_collision(
     ellipsoid_dimensions, 
@@ -54,14 +60,7 @@ function ellipsoid_normal(
     return normal;
 }
 
-function solve_quadratic(a,b,c){
-    let discriminant = (b**2-4*a*c);
-    // might be slightly less than 0 due to floating point errors
-    discriminant = Math.max(discriminant, 0);
-    let solution_1 = (-b-Math.sqrt(discriminant))/(2*a);
-    let solution_2 = (-b+Math.sqrt(discriminant))/(2*a);
-    return [solution_1, solution_2];
-}
+
 
 function ball_ellipsoid_intersection(
     ellipsoid_dimensions, ellipsoid_center,
@@ -84,7 +83,7 @@ function ball_ellipsoid_intersection(
     if(motion_type === "free"){
         // repeated approximations
         for(let i = 0; i < 5; i++){
-            // 1: find intersection of linear approximation with ellipse
+            // 1: find intersection of linear approximation with ellipsoid
             let scaled_linear_approx = linear_approx.times_pairwise(inverted_dimensions);
             let scaled_start_point = start_point.times_pairwise(inverted_dimensions);
             let a = scaled_linear_approx.dot(scaled_linear_approx);
@@ -167,13 +166,11 @@ function ball_ground_intersection(
 function ball_hole_collision(ball_prev_center, ball_prev_velocity, motion_type, hole_location){
     // no chip-ins/bounce-ins
     if(motion_type === "free"){
-        console.log("not rolling");
         return false;
     }
     let speed = ball_prev_velocity.norm();
     // going too fast ==> misses the hole
     if(speed > 5){
-        console.log("too fast");
         return false;
     }
     // otherwise, just check if we cross the hole
@@ -184,10 +181,11 @@ function ball_hole_collision(ball_prev_center, ball_prev_velocity, motion_type, 
     let c = from_hole.dot(from_hole)-1;
     let ts = solve_quadratic(a,b,c);
     // true only if we crossed through hole sphere
-    console.log("Solutions: "+ts[0]+", "+ts[1]);
+    
     return (
-        (ts[0] > -(10**-4) && (ts[0]-1) < 10**-4) ||
-        (ts[1] > -(10**-4) && (ts[1]-1) < 10**-4)
+        (ts[0] > -(10**-4) && ts[0] < 1) ||
+        (ts[1] > -(10**-4) && ts[1] < 1) ||
+        (ts[0] < (10**-4) && (ts[1] > 1))
     );
 }
 
@@ -309,13 +307,13 @@ function predict_motion(ball_prev_center, ball_prev_velocity, hole_location, hil
     for(let hill of hills){
         let ellipsoid_center = hill["center"];
         let ellipsoid_dimensions = hill["dimensions"];
-        // check if ball already is on ellipse
-        // and if it re-collides with ellipse within half-tick
+        // check if ball already is on ellipsoid
+        // and if it re-collides with ellipsoid within half-tick
         if(
             ball_ellipsoid_collision(ellipsoid_dimensions, ellipsoid_center, ball_prev_center) &&
             ball_ellipsoid_collision(ellipsoid_dimensions, ellipsoid_center, free_half_tick)
         ){
-            // if so, ball should roll across ellipse
+            // if so, ball should roll across ellipsoid
             return {
                 "type": "roll",
                 "position": ball_prev_center.plus(
@@ -381,10 +379,306 @@ export function update_motion(ball_prev_center, ball_prev_velocity, hills, hole_
     else{
         let collision_point = collision_info["point"];
         let collision_normal = collision_info["normal"];
-        console.log("bounce normal: "+collision_normal);
         return{
             "position": collision_point,
             "velocity": bounce(ball_prev_center, predicted_velocity, motion_type, collision_point, collision_normal)
         }
     }
+}
+
+export function update_pv(ball_prev_center, ball_prev_velocity, movement_type, hole_location, obstacles){
+    // 0: given direction and type of motion
+    // 1: compute next trajectory
+    let trajectory = get_trajectory(ball_prev_center, ball_prev_velocity, movement_type);
+    // 2: detect collisions
+    // check for intersection with the hole
+    let collision_with_hole = find_intersection(trajectory, hole_location.plus(vec3(0,1,0)), vec3(0.5,0.5,0.5));
+    if(collision_with_hole !== null){
+        return {
+            "position": hole_location,
+            "velocity": vec3(0,0,0),
+            "movement_type": "hole"
+        }
+    }
+    // check for intersection of path with each possible object
+    let collisions = obstacles
+        .map((obstacle) => find_intersection(trajectory,obstacle["center"],obstacle["dimensions"]))
+        .filter((collision) => (collision !== null)); 
+    // if no collisions,  
+    if(collisions.length === 0){
+        let next_pv = predict_trajectory(trajectory);
+        return{
+            "position": next_pv["position"],
+            "velocity": next_pv["velocity"],
+            "movement_type": "free"
+        }
+    }
+    // otherwise,
+    else{
+        // find first collision (next position)
+        let first_collision = collisions.reduce(
+            (collision1, collision2) => {
+                return (collision1["time"] < collision2["time"]) ? collision1 : collision2;
+            }
+        );
+        // compute velocity after impact (next velocity)
+        let new_motion = collide(first_collision["normal"], first_collision["velocity"]);
+        let new_velocity = new_motion["velocity"];
+        console.log("POST COLLISION VELOCITY: "+new_velocity);
+        let new_movement_type = new_motion["motion_type"];
+        return{
+            "position": first_collision["position"],
+            "velocity": new_velocity,
+            "movement_type": new_movement_type
+        };
+    }
+}
+
+function predict_trajectory(trajectory){
+    if(trajectory["type"] === "linear"){
+        return predict_linear_trajectory(trajectory);
+        // NOTE: may need to apply gravity here
+    }
+    else{
+        return predict_parabolic_trajectory(trajectory);
+    }
+}
+
+function predict_linear_trajectory(trajectory){
+    // follow velocity from start point to end
+    let end_point = trajectory["constant"].plus(trajectory["linear"]);
+    // apply friction to linear velocity
+    let end_velocity = trajectory["linear"].times(friction_factor);
+    return {
+        "position": end_point,
+        "velocity": end_velocity,
+    };
+}
+
+function predict_parabolic_trajectory(trajectory){
+    // follow curved trajectory from start point
+    let end_point = trajectory["constant"].plus(trajectory["linear"]).plus(trajectory["quadratic"]);
+    // apply gravity to velocity
+    let end_velocity = trajectory["linear"].plus(trajectory["quadratic"].times(2));
+    return {
+        "position": end_point,
+        "velocity": end_velocity,
+    };
+}
+
+function get_trajectory(ball_prev_center, ball_prev_velocity, movement_type){
+    if(movement_type === "roll"){
+        return get_linear_trajectory(ball_prev_center, ball_prev_velocity);
+    }
+    else if(movement_type === "free"){
+        return get_parabolic_trajectory(ball_prev_center, ball_prev_velocity);
+    }
+}
+
+function get_linear_trajectory(ball_prev_center, ball_prev_velocity){
+    return {
+        "type": "linear",
+        "constant": ball_prev_center,
+        "linear": ball_prev_velocity,
+    };
+}
+
+function get_parabolic_trajectory(ball_prev_center, ball_prev_velocity){
+    return{
+        "type": "parabolic",
+        "constant": ball_prev_center,
+        "linear": ball_prev_velocity,
+        "quadratic": vec3(0,-g/2,0)
+    };
+}
+
+function find_intersection(trajectory, surface_center, surface_dimensions){
+    if(trajectory["type"]==="linear"){
+        if(surface_dimensions === "plane"){
+            return linear_ground_intersection(trajectory);
+        }
+        else{
+            return linear_ellipsoid_intersection(trajectory, surface_center, surface_dimensions);
+        }
+    }
+    else{
+        if(surface_dimensions === "plane"){
+            return parabolic_ground_intersection(trajectory);
+        }
+        else{
+            return parabolic_ellipsoid_intersection(trajectory, surface_center, surface_dimensions);
+        }
+    }
+}
+
+function linear_ground_intersection(trajectory){
+    let y_start = trajectory["constant"][1];
+    let y_velocity = trajectory["linear"][1];
+    let y_final = y_start + y_velocity;
+    // can't hit ground if moving up or flat
+    if(y_velocity > -Number.EPSILON){
+        return null;
+    }
+    // otherwise, check if we end up below the surface (y=1)
+    let distance_to_ground = 1-y_start;
+    if(y_final > 1){
+        return null;
+    }
+    else{
+        let t = (distance_to_ground)/(y_velocity);
+        return {
+            "time": t,
+            "position": trajectory["constant"].plus(trajectory["linear"].times(t)),
+            "velocity": trajectory["linear"],
+            "normal": vec3(0,1,0)
+        };
+    }
+}
+
+function solve_quadratic(a,b,c,pm){
+    let discriminant = (b**2-4*a*c);
+    // check for no real solutions
+    if(discriminant < -(10**-4)){
+        return null;
+    }
+    // otherwise, return the requested solution
+    discriminant = Math.max(discriminant, 0);
+    return (-b + pm * Math.sign(a) * Math.sqrt(discriminant))/(2*a);
+}
+
+function parabolic_ground_intersection(trajectory){
+    let c = trajectory["constant"][1] - 1;
+    let b = trajectory["linear"][1];
+    let a = trajectory["quadratic"][1];
+    // get bigger solution, if it exists (smaller one happens from negative extrapolation)
+    let t = solve_quadratic(a,b,c,1);
+    // check if nonexistent, or outside range [0,1]
+    if(t === null || t < 0 || t > 1){
+        return null;
+    }
+    // otherwise, return it
+    else{
+        t = Math.max(t,0);
+        return {
+            "time": t,
+            "position": trajectory["constant"].plus(trajectory["linear"].times(t)).plus(trajectory["quadratic"].times(t**2)),
+            "velocity": trajectory["linear"].plus(trajectory["quadratic"].times(2*t)),
+            "normal": vec3(0,1,0)
+        }
+    }
+}
+
+function linear_ellipsoid_intersection(trajectory, ellipsoid_center, ellipsoid_dimensions){
+    let start_point = trajectory["constant"].to4(true);
+    let end_point = (trajectory["constant"].plus(trajectory["linear"])).to4(true);
+    let center_ellipsoid = Mat4.inverse(Mat4.translation(ellipsoid_center[0], ellipsoid_center[1], ellipsoid_center[2]));
+    start_point = center_ellipsoid.times(start_point).to3();
+    end_point = center_ellipsoid.times(end_point).to3();
+    let linear_approximation = end_point.minus(start_point);
+    // start = (sx,sy,sz), linear = (lx,ly,lz), dimensions = (dx,dy,dz)
+    // ((sx+t*lx)/(dx))^2+((sy+t*ly)/(dy))^2+((sz+t*lz)/(dz))^2 = 1
+    let inverted_dimensions = vec3(1/(ellipsoid_dimensions[0]),1/(ellipsoid_dimensions[1]),1/(ellipsoid_dimensions[2]));
+    let scaled_linear_approx = linear_approximation.times_pairwise(inverted_dimensions);
+    let scaled_start_point = start_point.times_pairwise(inverted_dimensions);
+    let a = scaled_linear_approx.dot(scaled_linear_approx);
+    let b = 2 * scaled_linear_approx.dot(scaled_start_point);
+    let c = scaled_start_point.dot(scaled_start_point);
+    // take smaller solution (bigger one hits bottom of hill)
+    let t = solve_quadratic(a,b,c,-1);
+    // check if nonexistent, or outside range (0,1]
+    if(t === null || t <= 0 || t > 1){
+        return null;
+    }
+    // otherwise, return it
+    else{
+        t = Math.max(t,0);
+        return{
+            "time": t,
+            "position": start_point.plus(trajectory["linear"].times(t)),
+            "velocity": trajectory["linear"],
+            "normal": ellipsoid_normal(ellipsoid_dimensions, ellipsoid_center, position)
+        }
+    }
+}
+
+function parabolic_ellipsoid_intersection(trajectory, ellipsoid_center, ellipsoid_dimensions){
+    // prepare to collect t after repeated approximations
+    let t = null;
+    // get start and end points
+    let start_point = trajectory["constant"];
+    let end_point = start_point.plus(trajectory["linear"]).plus(trajectory["quadratic"]);
+    // repeated approximation:
+    for(let i = 0; i < 5; i++){
+        // get linear approximation between start & end points
+        let linear_approximation = end_point.minus(start_point);
+        // find intersection between linear approximation and ellipsoid
+        let linear_intersection_t = linear_ellipsoid_intersection({"constant":start_point, "linear":linear_approximation},ellipsoid_center,ellipsoid_dimensions);
+        let linear_intersection_point = start_point.plus(linear_approximation.times(linear_intersection_t));
+        // find normal at point of intersection
+        let linear_intersection_normal = ellipsoid_normal(ellipsoid_dimensions, ellipsoid_center, linear_intersection_point);
+        // find intersection between tangent plane and quadratic trajectory
+        // trajectory is given by point = constant + velocity * t + acceleration * t^2
+        // plane is [normal (dot) (point - linear_intersection) = 0]
+        // quadratic to solve is (nx)(sx+vx*t+ax*t^2) + ()_y + ()_z = 0
+        let a = linear_intersection_normal.dot(trajectory["quadratic"]);
+        let b = linear_intersection_normal.dot(trajectory["linear"]);
+        let c = linear_intersection_normal.dot(trajectory["constant"]);
+        // get bigger solution, if it exists (smaller one happens from negative extrapolation)
+        t = solve_quadratic(a,b,c,1);
+        // check if nonexistent, or outside range (0,1]
+        if(t === null || t <=0 || t > 1){
+            return null;
+        }
+        // otherwise, continue with this value
+        // set corresponding point as the new start point
+        let quadratic_intersection = trajectory["constant"]
+            .plus(trajectory["linear"].times(t))
+            .plus(trajectory["quadratic"].times(t**2));
+        start_point = quadratic_intersection;
+    }
+    // return t of final intersection point, if it exists and is in the range (0,1]
+    if(t === null || t <= 0 || t > 1){
+        return null;
+    }
+    else{
+        return {
+            "time": t,
+            "position": start_point,
+            "velocity": trajectory["linear"].plus(trajectory["quadratic"].times(2*t)),
+            "normal": ellipsoid_normal(ellipsoid_dimensions, ellipsoid_center, position)
+        };
+    }
+}
+
+// determine new velocity after something with this velocity collides with something with this normal
+function collide(normal, velocity){
+    // make basis for normal
+    let basis_x = normal.normalized();
+    let basis_y = basis_x.cross(vec3(1,0,0)).normalized();
+    let basis_z = basis_x.cross(basis_y);
+    let change_of_basis = new Matrix(
+        [basis_x[0],basis_x[1],basis_x[2],0],
+        [basis_y[0],basis_y[1],basis_y[2],0],
+        [basis_z[0],basis_z[1],basis_z[2],0],
+        [0,0,0,1]
+    );
+    // transform velocity into this basis
+    let transformed_velocity = change_of_basis.times(velocity).to3();
+    // decide whether it should bounce or roll
+    let collided_transformed_velocity;
+    let motion_type;
+    if(Math.abs(transformed_velocity[0]) < roll_threshold){
+        collided_transformed_velocity = transformed_velocity.times_pairwise(vec3(0,friction_factor, friction_factor));
+        motion_type = "roll";
+    }
+    else{
+        collided_transformed_velocity = transformed_velocity.times_pairwise(vec3(-bounce_factor, friction_factor, friction_factor));
+        motion_type = "free";
+    }
+    // return new velocity
+    let collided_velocity = Mat4.inverse(change_of_basis).times(collided_transformed_velocity).to3();
+    return {
+        "velocity": collided_velocity,
+        "motion_type": motion_type
+    };
 }

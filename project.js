@@ -143,6 +143,20 @@ export class Project extends Scene {
         "dimensions":vec3(9,4,6),
       }
     ]
+    // include ground in obstacles
+    this.obstacles = this.hills.map(
+      (hill) => {
+        return {
+          "center":hill["center"],
+          // add 1 to each dimension in order to be compatible with the center of the ball
+          "dimensions":hill["dimensions"].plus(vec3(1,1,1))
+        }
+      }
+    );
+    this.obstacles.push({
+      "center":vec3(0,1,0),
+      "dimensions":"plane"
+    });
 
     // set initial camera
     let eye = this.get_camera_location()
@@ -223,6 +237,9 @@ export class Project extends Scene {
       // this.phi = Math.max(this.phi - Math.PI * 2 / 90, 0);
       this.phi = Math.min(this.phi + Math.PI * 2 / 90 * 5, Math.PI/2)
   })
+  this.key_triggered_button("step", ['j'], () => {
+    this.step = true;
+  })
   }
 
   reset_ball(){
@@ -295,14 +312,24 @@ export class Project extends Scene {
         y_initial_velocity,
         z_initial_velocity
       );
+      this.ball_movement = "free";
     }
     // otherwise, update them
     else {
-      let new_pv = physics.update_motion(this.ball_position, this.ball_velocity, this.hills, this.hole_location);
-      this.ball_position = new_pv["position"];
-      this.ball_velocity = new_pv["velocity"];
-      console.log("position: "+this.ball_position);
-      console.log("velocity: "+this.ball_velocity);
+      if(this.step){
+        // let new_pv = physics.update_motion(this.ball_position, this.ball_velocity, this.hills, this.hole_location);
+        // this.ball_position = new_pv["position"];
+        // this.ball_velocity = new_pv["velocity"];
+        // console.log("position: "+this.ball_position);
+        // console.log("velocity: "+this.ball_velocity);
+        let new_pv = physics.update_pv(this.ball_position, this.ball_velocity, this.ball_movement, this.hole_location, this.obstacles);
+        this.ball_position = new_pv["position"];
+        this.ball_velocity = new_pv["velocity"];
+        this.ball_movement = new_pv["movement_type"];
+        console.log("position: "+this.ball_position);
+        console.log("velocity: "+this.ball_velocity);
+        this.step = false;
+      }
     }
 
     // update the ball's location
